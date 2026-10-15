@@ -1,0 +1,3 @@
+rootProject.name = 'ubb-events-backend'
+
+include 'Business', 'RestServices', 'Persistence', 'Model', 'Common'
