@@ -1,0 +1,20 @@
+plugins {
+    id 'java-library'
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.ubb.events'
+version = '0.0.1-SNAPSHOT'
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+repositories { mavenCentral() }
+dependencyManagement { imports { mavenBom "org.springframework.boot:spring-boot-dependencies:${rootProject.springBootVersion}" } }
+dependencies {
+    api project(':Model')
+    api project(':Common')
+    api 'org.springframework.boot:spring-boot-starter-data-jpa'
+    runtimeOnly 'org.postgresql:postgresql'
+    testRuntimeOnly 'com.h2database:h2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+tasks.withType(Test).configureEach { useJUnitPlatform() }
