@@ -4,6 +4,7 @@ import com.ubb.events.domain.User;
 import com.ubb.events.dto.UserResponse;
 import com.ubb.events.persistence.UserRepository;
 import com.ubb.events.common.errors.ConflictException;
+import com.ubb.events.common.security.JwtTokenService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,8 @@ import static org.mockito.Mockito.*;
 class UserServiceImplTest {
     private final UserRepository repository = mock(UserRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-    private final UserServiceImpl service = new UserServiceImpl(repository, passwordEncoder);
+    private final JwtTokenService jwtTokenService = mock(JwtTokenService.class);
+    private final UserServiceImpl service = new UserServiceImpl(repository, passwordEncoder, jwtTokenService);
 
     @Test
     void delegatesSaveFindAndListToRepository() {
@@ -56,5 +58,17 @@ class UserServiceImplTest {
         assertThrows(ConflictException.class,
                 () -> service.register("Ada", "Lovelace", "ada@example.com", "Str0ng!Pass"));
         verify(repository, never()).save(any(User.class));
+    }
+
+    @Test
+    void authenticatesValidCredentialsAndReturnsToken() {
+        User user = new User(7L, "Ada", "Lovelace", "ada@example.com", "encoded");
+        when(repository.findByEmail("ada@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("Str0ng!Pass", "encoded")).thenReturn(true);
+        when(jwtTokenService.issue(7L)).thenReturn("token");
+
+        var response = service.login("ada@example.com", "Str0ng!Pass");
+
+        assertEquals("token", response.getToken());
     }
 }

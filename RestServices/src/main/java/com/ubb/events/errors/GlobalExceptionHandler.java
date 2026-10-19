@@ -3,6 +3,7 @@ package com.ubb.events.errors;
 import com.ubb.events.common.errors.BusinessRuleException;
 import com.ubb.events.common.errors.ConflictException;
 import com.ubb.events.common.errors.ForbiddenException;
+import com.ubb.events.common.errors.InvalidCredentialsException;
 import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.common.errors.ValidationException;
 import com.ubb.events.dto.ErrorDetail;
@@ -59,6 +60,13 @@ public class GlobalExceptionHandler {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     ResponseEntity<ErrorResponse> forbidden(ForbiddenException exception) {
         return response(HttpStatus.FORBIDDEN, exception.getMessage(), exception.getErrors());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    @ApiResponse(responseCode = "401", description = "Invalid credentials",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    ResponseEntity<ErrorResponse> invalidCredentials(InvalidCredentialsException exception) {
+        return response(HttpStatus.UNAUTHORIZED, exception.getMessage(), List.of());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
