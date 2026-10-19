@@ -11,6 +11,8 @@ repositories { mavenCentral() }
 dependencyManagement { imports { mavenBom "org.springframework.boot:spring-boot-dependencies:${rootProject.springBootVersion}" } }
 dependencies {
     api project(':Model')
+    api 'org.springframework.security:spring-security-crypto'
+    api 'org.springframework:spring-context'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

@@ -1,18 +1,23 @@
 package com.ubb.events.implementation;
 
 import com.ubb.events.domain.User;
+import com.ubb.events.dto.UserResponse;
 import com.ubb.events.persistence.UserRepository;
+import com.ubb.events.common.errors.ConflictException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 class UserServiceImplTest {
     private final UserRepository repository = mock(UserRepository.class);
-    private final UserServiceImpl service = new UserServiceImpl(repository);
+    private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+    private final UserServiceImpl service = new UserServiceImpl(repository, passwordEncoder);
 
     @Test
     void delegatesSaveFindAndListToRepository() {
@@ -27,5 +32,29 @@ class UserServiceImplTest {
         verify(repository).save(user);
         verify(repository).findById(1L);
         verify(repository).findAll();
+    }
+
+    @Test
+    void registersWithEncodedPasswordAndReturnsPasswordFreeResponse() {
+        User saved = new User(7L, "Ada", "Lovelace", "ada@example.com", "encoded");
+        when(repository.existsByEmail("ada@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("Str0ng!Pass")).thenReturn("encoded");
+        when(repository.save(any(User.class))).thenReturn(saved);
+
+        UserResponse response = service.register("Ada", "Lovelace", "ada@example.com", "Str0ng!Pass");
+
+        assertEquals(7L, response.getId());
+        assertEquals("ada@example.com", response.getEmail());
+        verify(passwordEncoder).encode("Str0ng!Pass");
+        verify(repository).save(argThat(user -> "encoded".equals(user.getPassword())));
+    }
+
+    @Test
+    void rejectsDuplicateEmailBeforeSaving() {
+        when(repository.existsByEmail("ada@example.com")).thenReturn(true);
+
+        assertThrows(ConflictException.class,
+                () -> service.register("Ada", "Lovelace", "ada@example.com", "Str0ng!Pass"));
+        verify(repository, never()).save(any(User.class));
     }
 }

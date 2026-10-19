@@ -24,7 +24,7 @@ class UserTest {
         assertColumn("firstName", "first_name", false, false);
         assertColumn("lastName", "last_name", false, false);
         assertColumn("email", "email", false, true);
-        assertColumn("password", "password", false, true);
+        assertColumn("password", "password", false, false);
     }
 
     private static void assertColumn(String fieldName, String columnName, boolean nullable, boolean unique)

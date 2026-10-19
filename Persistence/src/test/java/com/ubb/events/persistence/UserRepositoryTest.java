@@ -36,9 +36,15 @@ class UserRepositoryTest {
     }
 
     @Test
-    void rejectsDuplicatePassword() {
+    void allowsDuplicatePassword() {
         repository.saveAndFlush(new User(null, "Ada", "Lovelace", "ada@example.com", "hash-1"));
-        assertThrows(DataIntegrityViolationException.class,
-                () -> repository.saveAndFlush(new User(null, "Grace", "Hopper", "grace@example.com", "hash-1")));
+        assertDoesNotThrow(() -> repository.saveAndFlush(new User(null, "Grace", "Hopper", "grace@example.com", "hash-1")));
+    }
+
+    @Test
+    void findsExistingEmail() {
+        repository.saveAndFlush(new User(null, "Ada", "Lovelace", "ada@example.com", "hash-1"));
+        assertTrue(repository.existsByEmail("ada@example.com"));
+        assertFalse(repository.existsByEmail("missing@example.com"));
     }
 }
