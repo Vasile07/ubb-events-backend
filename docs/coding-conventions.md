@@ -2,7 +2,7 @@
 
 ## Java naming
 
-Use PascalCase for classes, interfaces, records, and enums; camelCase for methods, parameters, and fields; and UPPER_SNAKE_CASE for constants. Package names are lowercase. Name tests after the class under test with the `Test` suffix.
+Use PascalCase for classes, interfaces, and enums; camelCase for methods, parameters, and fields; and UPPER_SNAKE_CASE for constants. Package names are lowercase. Name tests after the class under test with the `Test` suffix. Avoid Java records; use classes and interfaces for application types and DTOs.
 
 ## Layering and dependency direction
 
