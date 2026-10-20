@@ -44,4 +44,16 @@ class MembershipRepositoryTest {
         assertThrows(DataIntegrityViolationException.class,
                 () -> repository.saveAndFlush(new Membership(null, user, null, null, null)));
     }
+
+    @Test
+    void findsOnlyMembershipsForRequestedUser() {
+        User ana = userRepository.saveAndFlush(new User(null, "Ana", "Student", "ana-list@example.com", "password"));
+        User bob = userRepository.saveAndFlush(new User(null, "Bob", "Student", "bob-list@example.com", "password"));
+        Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        repository.saveAndFlush(new Membership(null, ana, organization, MembershipRole.MEMBER, MembershipStatus.ACTIVE));
+        repository.saveAndFlush(new Membership(null, bob, organization, MembershipRole.MANAGER, MembershipStatus.ACTIVE));
+
+        assertEquals(1, repository.findAllByUserId(ana.getId()).size());
+        assertEquals(ana.getId(), repository.findAllByUserId(ana.getId()).get(0).getUser().getId());
+    }
 }
