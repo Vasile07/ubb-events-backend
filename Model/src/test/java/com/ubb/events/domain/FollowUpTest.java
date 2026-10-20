@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +26,11 @@ class FollowUpTest {
         assertTrue(id.isAnnotationPresent(Id.class));
         assertEquals(GenerationType.IDENTITY, id.getAnnotation(GeneratedValue.class).strategy());
 
-        Field eventId = FollowUp.class.getDeclaredField("eventId");
-        Column eventColumn = eventId.getAnnotation(Column.class);
+        Field event = FollowUp.class.getDeclaredField("event");
+        assertEquals(Event.class, event.getType());
+        assertTrue(event.isAnnotationPresent(ManyToOne.class));
+        assertFalse(event.getAnnotation(ManyToOne.class).optional());
+        JoinColumn eventColumn = event.getAnnotation(JoinColumn.class);
         assertNotNull(eventColumn);
         assertEquals("event_id", eventColumn.name());
         assertFalse(eventColumn.nullable());
@@ -36,6 +41,7 @@ class FollowUpTest {
         assertEquals("content", contentColumn.name());
         assertFalse(contentColumn.nullable());
 
+        assertFalse(hasFieldNamed("eventId"));
         assertFalse(hasFieldNamed("summary"));
         assertFalse(hasFieldNamed("feedback"));
     }

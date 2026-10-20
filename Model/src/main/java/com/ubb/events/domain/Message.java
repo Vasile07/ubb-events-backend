@@ -25,8 +25,9 @@ public class Message {
     @Column(name = "message_id", nullable = false)
     private Long id;
 
-    @Column(name = "event_id", nullable = false)
-    private Long eventId;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "event_id", nullable = false)
+    private Event event;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "sender_id", nullable = false)

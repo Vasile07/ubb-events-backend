@@ -28,9 +28,14 @@ class MessageTest {
         assertEquals("message_id", id.getAnnotation(Column.class).name());
         assertFalse(id.getAnnotation(Column.class).nullable());
 
-        Field eventId = Message.class.getDeclaredField("eventId");
-        assertEquals("event_id", eventId.getAnnotation(Column.class).name());
-        assertFalse(eventId.getAnnotation(Column.class).nullable());
+        Field event = Message.class.getDeclaredField("event");
+        assertEquals(Event.class, event.getType());
+        assertTrue(event.isAnnotationPresent(ManyToOne.class));
+        assertFalse(event.getAnnotation(ManyToOne.class).optional());
+        assertNotNull(event.getAnnotation(JoinColumn.class));
+        assertEquals("event_id", event.getAnnotation(JoinColumn.class).name());
+        assertFalse(event.getAnnotation(JoinColumn.class).nullable());
+        assertThrows(NoSuchFieldException.class, () -> Message.class.getDeclaredField("eventId"));
 
         Field sender = Message.class.getDeclaredField("sender");
         assertTrue(sender.isAnnotationPresent(ManyToOne.class));

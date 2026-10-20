@@ -1,6 +1,5 @@
 package com.ubb.events.domain;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -27,9 +26,13 @@ class RegistrationTest {
         assertTrue(id.isAnnotationPresent(Id.class));
         assertEquals(GenerationType.IDENTITY, id.getAnnotation(GeneratedValue.class).strategy());
         assertFalse(hasFieldNamed("status"));
+        assertFalse(hasFieldNamed("eventId"));
 
-        Field eventId = Registration.class.getDeclaredField("eventId");
-        Column eventColumn = eventId.getAnnotation(Column.class);
+        Field event = Registration.class.getDeclaredField("event");
+        assertEquals(Event.class, event.getType());
+        assertTrue(event.isAnnotationPresent(ManyToOne.class));
+        assertFalse(event.getAnnotation(ManyToOne.class).optional());
+        JoinColumn eventColumn = event.getAnnotation(JoinColumn.class);
         assertNotNull(eventColumn);
         assertEquals("event_id", eventColumn.name());
         assertFalse(eventColumn.nullable());
