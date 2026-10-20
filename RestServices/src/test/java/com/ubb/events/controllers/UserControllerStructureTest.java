@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class UserControllerStructureTest {
     @Test
-    void retainsUsersRootMappingAndServiceDependencyWithoutHandlers() throws Exception {
+    void retainsUsersRootMappingAndProfileHandler() throws Exception {
         assertTrue(UserController.class.isAnnotationPresent(RestController.class));
         assertEquals("/api/users", UserController.class.getAnnotation(RequestMapping.class).value()[0]);
-        assertEquals(0, UserController.class.getDeclaredMethods().length);
+        assertEquals(1, UserController.class.getDeclaredMethods().length);
         Constructor<?> constructor = UserController.class.getDeclaredConstructor(UserService.class);
         assertNotNull(constructor);
     }

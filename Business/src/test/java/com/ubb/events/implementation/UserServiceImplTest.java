@@ -3,6 +3,7 @@ package com.ubb.events.implementation;
 import com.ubb.events.domain.User;
 import com.ubb.events.dto.UserResponse;
 import com.ubb.events.persistence.UserRepository;
+import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.common.errors.ConflictException;
 import com.ubb.events.common.security.JwtTokenService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,9 +18,10 @@ import static org.mockito.Mockito.*;
 
 class UserServiceImplTest {
     private final UserRepository repository = mock(UserRepository.class);
+    private final MembershipRepository membershipRepository = mock(MembershipRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final JwtTokenService jwtTokenService = mock(JwtTokenService.class);
-    private final UserServiceImpl service = new UserServiceImpl(repository, passwordEncoder, jwtTokenService);
+    private final UserServiceImpl service = new UserServiceImpl(repository, membershipRepository, passwordEncoder, jwtTokenService);
 
     @Test
     void delegatesSaveFindAndListToRepository() {

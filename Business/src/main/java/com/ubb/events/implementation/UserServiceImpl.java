@@ -3,10 +3,16 @@ package com.ubb.events.implementation;
 import com.ubb.events.UserService;
 import com.ubb.events.common.errors.ConflictException;
 import com.ubb.events.common.errors.InvalidCredentialsException;
+import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.domain.User;
 import com.ubb.events.dto.UserResponse;
 import com.ubb.events.dto.LoginResponse;
+import com.ubb.events.dto.UserProfileResponse;
+import com.ubb.events.dto.MembershipResponse;
+import com.ubb.events.persistence.MembershipRepository;
+import com.ubb.events.domain.MembershipStatus;
+import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.persistence.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,12 +26,31 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
+    private final MembershipRepository membershipRepository;
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenService jwtTokenService) {
+    public UserServiceImpl(UserRepository userRepository, MembershipRepository membershipRepository, PasswordEncoder passwordEncoder, JwtTokenService jwtTokenService) {
         this.userRepository = userRepository;
+        this.membershipRepository = membershipRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
+    }
+
+    @Override
+    public UserProfileResponse getProfile(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        List<MembershipResponse> profileMemberships = membershipRepository.findAllByUserId(userId).stream()
+                .filter(membership -> membership.getRole() != null)
+                .filter(membership -> !(membership.getStatus() == MembershipStatus.PENDING
+                        && membership.getRole() == MembershipRole.MEMBER))
+                .map(membership -> new MembershipResponse(
+                        membership.getOrganization().getId(),
+                        membership.getStatus() == MembershipStatus.PENDING
+                                ? MembershipRole.MEMBER
+                                : membership.getRole()))
+                .toList();
+        return new UserProfileResponse(user.getId(), user.getFirstName(), user.getLastName(), user.getEmail(), profileMemberships);
     }
 
     @Override
