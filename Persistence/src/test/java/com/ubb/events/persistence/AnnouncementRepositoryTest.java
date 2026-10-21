@@ -33,7 +33,7 @@ class AnnouncementRepositoryTest {
     @Test
     void savesAndReloadsAnnouncement() {
         Event event = saveEvent();
-        Announcement saved = repository.saveAndFlush(new Announcement(null, event, "Title", "Content", null, null));
+        Announcement saved = repository.saveAndFlush(new Announcement(null, event, "Title", "Content"));
         assertNotNull(saved.getId());
         entityManager.clear();
         Announcement reloaded = repository.findById(saved.getId()).orElseThrow();
@@ -45,9 +45,9 @@ class AnnouncementRepositoryTest {
     @Test
     void rejectsNullRequiredValues() {
         Event event = saveEvent();
-        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, null, "Title", "Content", null, null)));
-        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, event, null, "Content", null, null)));
-        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, event, "Title", null, null, null)));
+        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, null, "Title", "Content")));
+        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, event, null, "Content")));
+        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, event, "Title", null)));
     }
 
     private Event saveEvent() {

@@ -41,7 +41,7 @@ class AnnouncementTest {
         assertFalse(Announcement.class.getDeclaredField("title").getAnnotation(Column.class).nullable());
         assertEquals("content", Announcement.class.getDeclaredField("content").getAnnotation(Column.class).name());
         assertFalse(Announcement.class.getDeclaredField("content").getAnnotation(Column.class).nullable());
-        assertTrue(Announcement.class.getDeclaredField("author").isAnnotationPresent(jakarta.persistence.Transient.class));
-        assertTrue(Announcement.class.getDeclaredField("dateTime").isAnnotationPresent(jakarta.persistence.Transient.class));
+        assertThrows(NoSuchFieldException.class, () -> Announcement.class.getDeclaredField("author"));
+        assertThrows(NoSuchFieldException.class, () -> Announcement.class.getDeclaredField("dateTime"));
     }
 }
