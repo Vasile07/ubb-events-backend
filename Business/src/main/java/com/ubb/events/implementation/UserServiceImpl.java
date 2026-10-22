@@ -9,6 +9,7 @@ import com.ubb.events.domain.User;
 import com.ubb.events.dto.UserResponse;
 import com.ubb.events.dto.LoginResponse;
 import com.ubb.events.dto.UserProfileResponse;
+import com.ubb.events.dto.UpdateUserProfileRequest;
 import com.ubb.events.dto.MembershipResponse;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.domain.MembershipStatus;
@@ -40,6 +41,21 @@ public class UserServiceImpl implements UserService {
     public UserProfileResponse getProfile(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+        return toProfileResponse(user);
+    }
+
+    @Override
+    public UserProfileResponse updateProfile(Long userId, UpdateUserProfileRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        User savedUser = userRepository.save(user);
+        return toProfileResponse(savedUser);
+    }
+
+    private UserProfileResponse toProfileResponse(User user) {
+        Long userId = user.getId();
         List<MembershipResponse> profileMemberships = membershipRepository.findAllByUserId(userId).stream()
                 .filter(membership -> membership.getRole() != null)
                 .filter(membership -> !(membership.getStatus() == MembershipStatus.PENDING
