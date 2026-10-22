@@ -2,6 +2,7 @@ package com.ubb.events.implementation;
 
 import com.ubb.events.domain.User;
 import com.ubb.events.dto.UserResponse;
+import com.ubb.events.dto.UpdateUserProfileRequest;
 import com.ubb.events.persistence.UserRepository;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.common.errors.ConflictException;
@@ -72,5 +73,44 @@ class UserServiceImplTest {
         var response = service.login("ada@example.com", "Str0ng!Pass");
 
         assertEquals("token", response.getToken());
+    }
+
+    @Test
+    void updatesOnlyNamesAndPreservesEmail() {
+        User user = new User(7L, "Ada", "Lovelace", "ada@example.com", "encoded");
+        when(repository.findById(7L)).thenReturn(Optional.of(user));
+        when(repository.save(user)).thenReturn(user);
+        when(membershipRepository.findAllByUserId(7L)).thenReturn(List.of());
+
+        var response = service.updateProfile(7L, request("Grace", "Hopper"));
+
+        assertEquals("Grace", response.getFirstName());
+        assertEquals("Hopper", response.getLastName());
+        assertEquals("ada@example.com", response.getEmail());
+        verify(repository).save(user);
+    }
+
+    @Test
+    void missingUserCannotBeUpdated() {
+        when(repository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(com.ubb.events.common.errors.NotFoundException.class,
+                () -> service.updateProfile(99L, request("Grace", "Hopper")));
+        verify(repository, never()).save(any(User.class));
+    }
+
+    private static UpdateUserProfileRequest request(String firstName, String lastName) {
+        try {
+            var request = new UpdateUserProfileRequest();
+            var first = UpdateUserProfileRequest.class.getDeclaredField("firstName");
+            first.setAccessible(true);
+            first.set(request, firstName);
+            var last = UpdateUserProfileRequest.class.getDeclaredField("lastName");
+            last.setAccessible(true);
+            last.set(request, lastName);
+            return request;
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError(exception);
+        }
     }
 }
