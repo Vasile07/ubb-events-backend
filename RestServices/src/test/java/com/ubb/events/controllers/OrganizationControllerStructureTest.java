@@ -11,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OrganizationControllerStructureTest {
     @Test
-    void controllerDefinesRootMappingAndServiceDependencyWithoutHandlers() throws Exception {
+    void controllerDefinesRootMappingAndServiceDependencyWithListHandler() throws Exception {
         assertTrue(OrganizationController.class.isAnnotationPresent(RestController.class));
         assertEquals("/api/organizations",
                 OrganizationController.class.getAnnotation(RequestMapping.class).value()[0]);
-        assertEquals(0, OrganizationController.class.getDeclaredMethods().length);
+        assertNotNull(OrganizationController.class.getDeclaredMethod("list", java.security.Principal.class));
         Constructor<?> constructor = OrganizationController.class.getDeclaredConstructor(OrganizationService.class);
         assertNotNull(constructor);
     }
