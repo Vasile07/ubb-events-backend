@@ -1,7 +1,9 @@
 package com.ubb.events.implementation;
 
 import com.ubb.events.OrganizationService;
+import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.dto.OrganizationResponse;
+import com.ubb.events.dto.OrganizationDetailsResponse;
 import com.ubb.events.dto.OrganizationMembershipStatus;
 import com.ubb.events.dto.OrganizationRole;
 import com.ubb.events.domain.Membership;
@@ -33,6 +35,26 @@ public class OrganizationServiceImpl implements OrganizationService {
         return organizations.findAll().stream()
                 .map(organization -> toResponse(organization, byOrganization.get(organization.getId())))
                 .toList();
+    }
+
+    @Override
+    public OrganizationDetailsResponse getOrganizationDetails(Long userId, Long organizationId) {
+        Organization organization = organizations.findById(organizationId)
+                .orElseThrow(() -> new NotFoundException("Organization not found"));
+        Membership membership = memberships.findByUserIdAndOrganizationId(userId, organizationId)
+                .orElse(null);
+
+        OrganizationMembershipStatus status = OrganizationMembershipStatus.NONE;
+        if (membership != null && membership.getStatus() != null) {
+            if (membership.getStatus() == MembershipStatus.ACTIVE) {
+                status = OrganizationMembershipStatus.MEMBER;
+            } else if (membership.getStatus() == MembershipStatus.PENDING) {
+                status = OrganizationMembershipStatus.PENDING;
+            }
+        }
+
+        return new OrganizationDetailsResponse(
+                organization.getId(), organization.getName(), organization.getDescription(), status);
     }
 
     private OrganizationResponse toResponse(Organization organization, Membership membership) {

@@ -5,6 +5,8 @@ import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.domain.MembershipStatus;
 import com.ubb.events.domain.Organization;
 import com.ubb.events.dto.OrganizationResponse;
+import com.ubb.events.dto.OrganizationDetailsResponse;
+import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.persistence.OrganizationRepository;
 import org.junit.jupiter.api.Test;
@@ -54,5 +56,41 @@ class OrganizationServiceTest {
         assertEquals("details", result.get(5).description());
         assertEquals("MEMBER", result.get(5).status().name());
         assertEquals("MEMBER", result.get(5).role().name());
+    }
+
+    @Test
+    void getsDetailsAndMapsMembershipStatusWithoutPrivateFields() {
+        Organization organization = new Organization(7L, "Students", "Public description", "private-logo");
+        when(organizations.findById(7L)).thenReturn(Optional.of(organization));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(
+                Optional.of(new Membership(1L, null, organization, MembershipRole.MANAGER, MembershipStatus.ACTIVE)));
+
+        OrganizationDetailsResponse result = service.getOrganizationDetails(42L, 7L);
+
+        assertEquals(new OrganizationDetailsResponse(7L, "Students", "Public description",
+                com.ubb.events.dto.OrganizationMembershipStatus.MEMBER), result);
+    }
+
+    @Test
+    void detailsMapMissingAndDeclinedMembershipToNoneAndPendingToPending() {
+        Organization organization = new Organization(7L, "Students", "Public description", null);
+        when(organizations.findById(7L)).thenReturn(Optional.of(organization));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(Optional.empty());
+        assertEquals("NONE", service.getOrganizationDetails(42L, 7L).status().name());
+
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(
+                Optional.of(new Membership(1L, null, organization, null, null)));
+        assertEquals("NONE", service.getOrganizationDetails(42L, 7L).status().name());
+
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(
+                Optional.of(new Membership(1L, null, organization, MembershipRole.MEMBER, MembershipStatus.PENDING)));
+        assertEquals("PENDING", service.getOrganizationDetails(42L, 7L).status().name());
+    }
+
+    @Test
+    void missingOrganizationIsNotFound() {
+        when(organizations.findById(99L)).thenReturn(Optional.empty());
+        org.junit.jupiter.api.Assertions.assertThrows(NotFoundException.class,
+                () -> service.getOrganizationDetails(42L, 99L));
     }
 }
