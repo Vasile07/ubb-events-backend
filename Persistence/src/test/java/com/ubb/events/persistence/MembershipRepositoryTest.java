@@ -56,4 +56,21 @@ class MembershipRepositoryTest {
         assertEquals(1, repository.findAllByUserId(ana.getId()).size());
         assertEquals(ana.getId(), repository.findAllByUserId(ana.getId()).get(0).getUser().getId());
     }
+
+    @Test
+    void findsMembershipsScopedByOrganizationAndStatus() {
+        User ana = userRepository.saveAndFlush(new User(null, "Ana", "Student", "ana-scope@example.com", "password"));
+        User bob = userRepository.saveAndFlush(new User(null, "Bob", "Student", "bob-scope@example.com", "password"));
+        Organization first = organizationRepository.saveAndFlush(new Organization(null, "First", null, null));
+        Organization second = organizationRepository.saveAndFlush(new Organization(null, "Second", null, null));
+        repository.saveAndFlush(new Membership(null, ana, first, MembershipRole.MEMBER, MembershipStatus.PENDING));
+        repository.saveAndFlush(new Membership(null, bob, first, MembershipRole.MEMBER, MembershipStatus.ACTIVE));
+        repository.saveAndFlush(new Membership(null, ana, second, MembershipRole.MEMBER, MembershipStatus.PENDING));
+
+        var results = repository.findAllByOrganizationIdAndStatus(first.getId(), MembershipStatus.PENDING);
+
+        assertEquals(1, results.size());
+        assertEquals(first.getId(), results.get(0).getOrganization().getId());
+        assertEquals(MembershipStatus.PENDING, results.get(0).getStatus());
+    }
 }

@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -77,6 +78,14 @@ public class GlobalExceptionHandler {
                 .map(error -> new ErrorDetail(error.getField(), error.getDefaultMessage()))
                 .toList();
         return response(HttpStatus.BAD_REQUEST, "Request validation failed", details);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ApiResponse(responseCode = "400", description = "Request parameter has an invalid value",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    ResponseEntity<ErrorResponse> methodArgumentTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        ErrorDetail detail = new ErrorDetail(exception.getName(), "Invalid value");
+        return response(HttpStatus.BAD_REQUEST, "Request validation failed", List.of(detail));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
