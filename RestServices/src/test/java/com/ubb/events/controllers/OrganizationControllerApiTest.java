@@ -5,6 +5,7 @@ import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.dto.OrganizationMembershipStatus;
 import com.ubb.events.dto.OrganizationResponse;
 import com.ubb.events.dto.OrganizationRole;
+import com.ubb.events.dto.OrganizationDetailsResponse;
 import com.ubb.events.implementation.OrganizationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,5 +53,41 @@ class OrganizationControllerApiTest {
                 .andExpect(jsonPath("$[0].logoUrl").doesNotExist())
                 .andExpect(jsonPath("$[0].members").doesNotExist())
                 .andExpect(jsonPath("$[0].requests").doesNotExist());
+    }
+
+    @Test
+    void detailsRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/organizations/7"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authenticatedDetailsReturnsPublicFieldsAndStatusOnly() throws Exception {
+        when(organizationService.getOrganizationDetails(42L, 7L)).thenReturn(
+                new OrganizationDetailsResponse(7L, "Students", "Public description",
+                        OrganizationMembershipStatus.MEMBER));
+
+        mockMvc.perform(get("/api/organizations/7")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").value(7))
+                .andExpect(jsonPath("$.name").value("Students"))
+                .andExpect(jsonPath("$.description").value("Public description"))
+                .andExpect(jsonPath("$.status").value("MEMBER"))
+                .andExpect(jsonPath("$.role").doesNotExist())
+                .andExpect(jsonPath("$.logoUrl").doesNotExist())
+                .andExpect(jsonPath("$.members").doesNotExist())
+                .andExpect(jsonPath("$.requests").doesNotExist());
+    }
+
+    @Test
+    void authenticatedDetailsMapsMissingOrganizationToNotFound() throws Exception {
+        when(organizationService.getOrganizationDetails(42L, 99L))
+                .thenThrow(new com.ubb.events.common.errors.NotFoundException("Organization not found"));
+
+        mockMvc.perform(get("/api/organizations/99")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
     }
 }
