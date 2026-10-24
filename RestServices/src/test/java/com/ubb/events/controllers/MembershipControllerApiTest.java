@@ -7,6 +7,10 @@ import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.domain.MembershipStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
+import com.ubb.events.dto.MembershipDecisionRequest;
+import com.ubb.events.dto.MembershipDecisionResponse;
+import com.ubb.events.dto.MembershipDecisionStatus;
+import com.ubb.events.domain.MembershipDecision;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -19,6 +23,8 @@ import java.util.List;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -71,5 +77,60 @@ class MembershipControllerApiTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Request validation failed"))
                 .andExpect(jsonPath("$.errors[0].field").value("status"));
+    }
+
+    @Test
+    void managerCanAcceptRequestAndReceivesActiveStatus() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(membershipService.decideMembershipRequest(7L, 11L,
+                new MembershipDecisionRequest(MembershipDecision.ACCEPTED)))
+                .thenReturn(new MembershipDecisionResponse(MembershipDecisionStatus.ACTIVE));
+
+        mockMvc.perform(patch("/api/organizations/7/membership-requests/11")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json")
+                        .content("{\"decision\":\"ACCEPTED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void managerCanDeclineRequestAndReceivesDeclinedOutcome() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(membershipService.decideMembershipRequest(7L, 11L,
+                new MembershipDecisionRequest(MembershipDecision.DECLINED)))
+                .thenReturn(new MembershipDecisionResponse(MembershipDecisionStatus.DECLINED));
+
+        mockMvc.perform(patch("/api/organizations/7/membership-requests/11")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json")
+                        .content("{\"decision\":\"DECLINED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DECLINED"));
+    }
+
+    @Test
+    void patchDecisionRequiresAuthenticationAndManagerAuthorization() throws Exception {
+        mockMvc.perform(patch("/api/organizations/7/membership-requests/11")
+                        .contentType("application/json").content("{\"decision\":\"ACCEPTED\"}"))
+                .andExpect(status().isUnauthorized());
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(false);
+        mockMvc.perform(patch("/api/organizations/7/membership-requests/11")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{\"decision\":\"ACCEPTED\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void patchDecisionRejectsInvalidOrMissingDecision() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        mockMvc.perform(patch("/api/organizations/7/membership-requests/11")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{\"decision\":\"UNKNOWN\"}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patch("/api/organizations/7/membership-requests/11")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest());
     }
 }

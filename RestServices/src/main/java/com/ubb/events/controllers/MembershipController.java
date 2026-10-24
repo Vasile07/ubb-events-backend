@@ -4,6 +4,8 @@ import com.ubb.events.MembershipService;
 import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.domain.MembershipStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
+import com.ubb.events.dto.MembershipDecisionRequest;
+import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.security.RequireOrgPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +17,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/organizations")
@@ -38,5 +43,22 @@ public class MembershipController {
             @PathVariable Long organizationId,
             @RequestParam(required = false) MembershipStatus status) {
         return ResponseEntity.ok(membershipService.listMembershipRequests(organizationId, status));
+    }
+
+    @PatchMapping("/{organizationId}/membership-requests/{requestId}")
+    @RequireOrgPermission(EffectiveOrgRole.MANAGER)
+    @Operation(summary = "Decide an organization membership request")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Membership request decision processed"),
+            @ApiResponse(responseCode = "400", description = "Invalid decision or identifier"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Manager organization access required"),
+            @ApiResponse(responseCode = "404", description = "Membership request not found"),
+            @ApiResponse(responseCode = "409", description = "Membership request is not pending")
+    })
+    public ResponseEntity<MembershipDecisionResponse> decideMembershipRequest(
+            @PathVariable Long organizationId, @PathVariable Long requestId,
+            @Valid @RequestBody MembershipDecisionRequest request) {
+        return ResponseEntity.ok(membershipService.decideMembershipRequest(organizationId, requestId, request));
     }
 }
