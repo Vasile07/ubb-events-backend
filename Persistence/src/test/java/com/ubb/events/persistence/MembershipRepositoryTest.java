@@ -75,6 +75,23 @@ class MembershipRepositoryTest {
     }
 
     @Test
+    void activeOrganizationQueryExcludesPendingAndOtherOrganizations() {
+        User ana = userRepository.saveAndFlush(new User(null, "Ana", "Member", "ana-active@example.com", "password"));
+        User bob = userRepository.saveAndFlush(new User(null, "Bob", "Pending", "bob-pending@example.com", "password"));
+        Organization first = organizationRepository.saveAndFlush(new Organization(null, "First active", null, null));
+        Organization second = organizationRepository.saveAndFlush(new Organization(null, "Second active", null, null));
+        repository.saveAndFlush(new Membership(null, ana, first, MembershipRole.MEMBER, MembershipStatus.ACTIVE));
+        repository.saveAndFlush(new Membership(null, bob, first, MembershipRole.MEMBER, MembershipStatus.PENDING));
+        repository.saveAndFlush(new Membership(null, ana, second, MembershipRole.MEMBER, MembershipStatus.ACTIVE));
+
+        var results = repository.findAllByOrganizationIdAndStatus(first.getId(), MembershipStatus.ACTIVE);
+
+        assertEquals(1, results.size());
+        assertEquals(ana.getId(), results.get(0).getUser().getId());
+        assertEquals(MembershipStatus.ACTIVE, results.get(0).getStatus());
+    }
+
+    @Test
     void findsMembershipByIdOnlyWithinRequestedOrganizationAndDeletesDeclinedRequest() {
         User user = userRepository.saveAndFlush(new User(null, "Ana", "Student", "ana-decision@example.com", "password"));
         Organization first = organizationRepository.saveAndFlush(new Organization(null, "First", null, null));
