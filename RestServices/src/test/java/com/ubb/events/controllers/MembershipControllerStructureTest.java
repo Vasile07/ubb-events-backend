@@ -32,4 +32,12 @@ class MembershipControllerStructureTest {
         assertEquals("/{organizationId}/membership-requests/{requestId}", method.getAnnotation(PatchMapping.class).value()[0]);
         assertEquals(EffectiveOrgRole.MANAGER, method.getAnnotation(com.ubb.events.security.RequireOrgPermission.class).value());
     }
+
+    @Test
+    void membersHandlerUsesMemberPermission() throws Exception {
+        Method method = MembershipController.class.getDeclaredMethod("listOrganizationMembers", Long.class);
+        assertEquals("/{organizationId}/members", method.getAnnotation(GetMapping.class).value()[0]);
+        assertEquals(EffectiveOrgRole.MEMBER,
+                method.getAnnotation(com.ubb.events.security.RequireOrgPermission.class).value());
+    }
 }

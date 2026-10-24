@@ -10,6 +10,7 @@ import com.ubb.events.dto.MembershipRequestResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.MembershipDecisionStatus;
+import com.ubb.events.dto.OrganizationMemberResponse;
 import com.ubb.events.domain.MembershipDecision;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,40 @@ class MembershipControllerApiTest {
     void unauthenticatedRequestIsRejected() throws Exception {
         mockMvc.perform(get("/api/organizations/7/membership-requests"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void activeMemberReceivesOrganizationMembersWithPersonalFieldsAndRole() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(membershipService.listOrganizationMembers(7L)).thenReturn(List.of(
+                new OrganizationMemberResponse(99L, "Ana", "Student", "ana@example.com", MembershipRole.MEMBER)));
+
+        mockMvc.perform(get("/api/organizations/7/members")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(99))
+                .andExpect(jsonPath("$[0].firstName").value("Ana"))
+                .andExpect(jsonPath("$[0].lastName").value("Student"))
+                .andExpect(jsonPath("$[0].email").value("ana@example.com"))
+                .andExpect(jsonPath("$[0].role").value("MEMBER"))
+                .andExpect(jsonPath("$[0].password").doesNotExist());
+    }
+
+    @Test
+    void membersEndpointRequiresActiveOrganizationMembership() throws Exception {
+        mockMvc.perform(get("/api/organizations/7/members"))
+                .andExpect(status().isUnauthorized());
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(false);
+        mockMvc.perform(get("/api/organizations/7/members")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void malformedOrganizationIdentifierIsRejected() throws Exception {
+        mockMvc.perform(get("/api/organizations/not-a-number/members")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

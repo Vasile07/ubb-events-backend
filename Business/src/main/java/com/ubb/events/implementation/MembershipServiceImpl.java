@@ -11,6 +11,7 @@ import com.ubb.events.dto.MembershipRequestResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.MembershipDecisionStatus;
+import com.ubb.events.dto.OrganizationMemberResponse;
 import com.ubb.events.persistence.MembershipRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,18 @@ public class MembershipServiceImpl implements MembershipService {
                         membership.getUser().getId(),
                         membership.getRole(),
                         membership.getStatus()))
+                .toList();
+    }
+
+    @Override
+    public List<OrganizationMemberResponse> listOrganizationMembers(Long organizationId) {
+        return memberships.findAllByOrganizationIdAndStatus(organizationId, MembershipStatus.ACTIVE).stream()
+                .map(membership -> new OrganizationMemberResponse(
+                        membership.getUser().getId(),
+                        membership.getUser().getFirstName(),
+                        membership.getUser().getLastName(),
+                        membership.getUser().getEmail(),
+                        membership.getRole()))
                 .toList();
     }
 

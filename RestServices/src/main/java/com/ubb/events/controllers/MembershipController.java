@@ -6,6 +6,7 @@ import com.ubb.events.domain.MembershipStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
+import com.ubb.events.dto.OrganizationMemberResponse;
 import com.ubb.events.security.RequireOrgPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +44,19 @@ public class MembershipController {
             @PathVariable Long organizationId,
             @RequestParam(required = false) MembershipStatus status) {
         return ResponseEntity.ok(membershipService.listMembershipRequests(organizationId, status));
+    }
+
+    @GetMapping("/{organizationId}/members")
+    @RequireOrgPermission
+    @Operation(summary = "View active organization members")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Active organization members returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid organization id"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Organization membership required")
+    })
+    public ResponseEntity<List<OrganizationMemberResponse>> listOrganizationMembers(@PathVariable Long organizationId) {
+        return ResponseEntity.ok(membershipService.listOrganizationMembers(organizationId));
     }
 
     @PatchMapping("/{organizationId}/membership-requests/{requestId}")
