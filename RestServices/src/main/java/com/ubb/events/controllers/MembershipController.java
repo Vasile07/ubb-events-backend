@@ -2,11 +2,15 @@ package com.ubb.events.controllers;
 
 import com.ubb.events.MembershipService;
 import com.ubb.events.EffectiveOrgRole;
+import com.ubb.events.common.errors.BusinessRuleException;
+import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.domain.MembershipStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.OrganizationMemberResponse;
+import com.ubb.events.dto.RolePromotionRequest;
+import com.ubb.events.dto.RolePromotionResponse;
 import com.ubb.events.security.RequireOrgPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -74,5 +78,26 @@ public class MembershipController {
             @PathVariable Long organizationId, @PathVariable Long requestId,
             @Valid @RequestBody MembershipDecisionRequest request) {
         return ResponseEntity.ok(membershipService.decideMembershipRequest(organizationId, requestId, request));
+    }
+
+    @PatchMapping("/{organizationId}/members/{userId}/role")
+    @RequireOrgPermission(EffectiveOrgRole.MANAGER)
+    @Operation(summary = "Promote an organization member to manager")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Organization member promoted to manager"),
+            @ApiResponse(responseCode = "400", description = "Invalid role or identifier"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Manager organization access required"),
+            @ApiResponse(responseCode = "404", description = "Organization member not found"),
+            @ApiResponse(responseCode = "409", description = "Organization member is already a manager")
+    })
+    public ResponseEntity<RolePromotionResponse> promoteMemberToManager(
+            @PathVariable Long organizationId,
+            @PathVariable Long userId,
+            @Valid @RequestBody RolePromotionRequest request) {
+        if (request.getRole() != MembershipRole.MANAGER) {
+            throw new BusinessRuleException("Only promotion to MANAGER is supported");
+        }
+        return ResponseEntity.ok(membershipService.promoteToManager(organizationId, userId));
     }
 }
