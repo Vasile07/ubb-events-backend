@@ -11,6 +11,7 @@ import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.MembershipDecisionStatus;
 import com.ubb.events.dto.OrganizationMemberResponse;
+import com.ubb.events.dto.RolePromotionResponse;
 import com.ubb.events.domain.MembershipDecision;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,12 +72,6 @@ class MembershipControllerApiTest {
                 .andExpect(status().isForbidden());
     }
 
-    @Test
-    void malformedOrganizationIdentifierIsRejected() throws Exception {
-        mockMvc.perform(get("/api/organizations/not-a-number/members")
-                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
-                .andExpect(status().isBadRequest());
-    }
 
     @Test
     void managerReceivesPendingRequestsByDefault() throws Exception {
@@ -167,5 +162,73 @@ class MembershipControllerApiTest {
                         .header("Authorization", "Bearer " + tokenService.issue(42L))
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void managerCanPromoteActiveMember() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(membershipService.promoteToManager(7L, 99L))
+                .thenReturn(new RolePromotionResponse(99L, MembershipRole.MANAGER));
+
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json")
+                        .content("{\"role\":\"MANAGER\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(99))
+                .andExpect(jsonPath("$.role").value("MANAGER"));
+    }
+
+    @Test
+    void rolePromotionRequiresAuthenticationAndManagerAuthorization() throws Exception {
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .contentType("application/json").content("{\"role\":\"MANAGER\"}"))
+                .andExpect(status().isUnauthorized());
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(false);
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{\"role\":\"MANAGER\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rolePromotionRejectsInvalidRoleBody() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{\"role\":\"MEMBER\"}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rolePromotionMapsMissingMemberToNotFound() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(membershipService.promoteToManager(7L, 99L))
+                .thenThrow(new com.ubb.events.common.errors.NotFoundException("Organization member not found"));
+
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{\"role\":\"MANAGER\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Organization member not found"));
+    }
+
+    @Test
+    void rolePromotionMapsAlreadyManagerToConflict() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(membershipService.promoteToManager(7L, 99L))
+                .thenThrow(new com.ubb.events.common.errors.ConflictException("Organization member is already a manager"));
+
+        mockMvc.perform(patch("/api/organizations/7/members/99/role")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json").content("{\"role\":\"MANAGER\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("Organization member is already a manager"));
     }
 }

@@ -1,6 +1,7 @@
 package com.ubb.events.implementation;
 
 import com.ubb.events.MembershipService;
+import com.ubb.events.common.errors.BusinessRuleException;
 import com.ubb.events.common.errors.ConflictException;
 import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.domain.Membership;
@@ -12,6 +13,7 @@ import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.MembershipDecisionStatus;
 import com.ubb.events.dto.OrganizationMemberResponse;
+import com.ubb.events.dto.RolePromotionResponse;
 import com.ubb.events.persistence.MembershipRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -71,5 +73,26 @@ public class MembershipServiceImpl implements MembershipService {
 
         memberships.delete(membership);
         return new MembershipDecisionResponse(MembershipDecisionStatus.DECLINED);
+    }
+
+    @Override
+    @Transactional
+    public RolePromotionResponse promoteToManager(Long organizationId, Long userId) {
+        Membership membership = memberships.findByUserIdAndOrganizationId(userId, organizationId)
+                .orElseThrow(() -> new NotFoundException("Organization member not found"));
+
+        if (membership.getStatus() != MembershipStatus.ACTIVE) {
+            throw new BusinessRuleException("Only active organization members can be promoted");
+        }
+        if (membership.getRole() == MembershipRole.MANAGER) {
+            throw new ConflictException("Organization member is already a manager");
+        }
+        if (membership.getRole() != MembershipRole.MEMBER) {
+            throw new BusinessRuleException("Only organization members can be promoted");
+        }
+
+        membership.setRole(MembershipRole.MANAGER);
+        memberships.save(membership);
+        return new RolePromotionResponse(userId, MembershipRole.MANAGER);
     }
 }

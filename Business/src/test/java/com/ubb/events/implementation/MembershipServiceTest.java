@@ -13,6 +13,8 @@ import com.ubb.events.dto.OrganizationMemberResponse;
 import com.ubb.events.domain.MembershipDecision;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.common.errors.NotFoundException;
+import com.ubb.events.common.errors.BusinessRuleException;
+import com.ubb.events.common.errors.ConflictException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -128,5 +130,49 @@ class MembershipServiceTest {
 
         assertThrows(NotFoundException.class, () -> service.decideMembershipRequest(7L, 11L,
                 new MembershipDecisionRequest(MembershipDecision.ACCEPTED)));
+    }
+
+    @Test
+    void promotesActiveMemberToManagerAndSavesMembership() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        Membership membership = new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.ACTIVE);
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(java.util.Optional.of(membership));
+
+        var response = service.promoteToManager(7L, 42L);
+
+        assertEquals(42L, response.getUserId());
+        assertEquals(MembershipRole.MANAGER, response.getRole());
+        assertEquals(MembershipRole.MANAGER, membership.getRole());
+        verify(memberships).save(membership);
+    }
+
+    @Test
+    void rejectsMissingMembership() {
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> service.promoteToManager(7L, 42L));
+    }
+
+    @Test
+    void rejectsInactiveMembership() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        Membership membership = new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.PENDING);
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(java.util.Optional.of(membership));
+
+        assertThrows(BusinessRuleException.class, () -> service.promoteToManager(7L, 42L));
+        verify(memberships, never()).save(any());
+    }
+
+    @Test
+    void rejectsAlreadyManager() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        Membership membership = new Membership(11L, user, organization, MembershipRole.MANAGER, MembershipStatus.ACTIVE);
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(java.util.Optional.of(membership));
+
+        assertThrows(ConflictException.class, () -> service.promoteToManager(7L, 42L));
+        verify(memberships, never()).save(any());
     }
 }
