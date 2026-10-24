@@ -73,4 +73,19 @@ class MembershipRepositoryTest {
         assertEquals(first.getId(), results.get(0).getOrganization().getId());
         assertEquals(MembershipStatus.PENDING, results.get(0).getStatus());
     }
+
+    @Test
+    void findsMembershipByIdOnlyWithinRequestedOrganizationAndDeletesDeclinedRequest() {
+        User user = userRepository.saveAndFlush(new User(null, "Ana", "Student", "ana-decision@example.com", "password"));
+        Organization first = organizationRepository.saveAndFlush(new Organization(null, "First", null, null));
+        Organization second = organizationRepository.saveAndFlush(new Organization(null, "Second", null, null));
+        Membership request = repository.saveAndFlush(new Membership(null, user, first, MembershipRole.MEMBER, MembershipStatus.PENDING));
+
+        assertTrue(repository.findByIdAndOrganizationId(request.getId(), first.getId()).isPresent());
+        assertTrue(repository.findByIdAndOrganizationId(request.getId(), second.getId()).isEmpty());
+
+        repository.delete(repository.findByIdAndOrganizationId(request.getId(), first.getId()).orElseThrow());
+        repository.flush();
+        assertTrue(repository.findById(request.getId()).isEmpty());
+    }
 }

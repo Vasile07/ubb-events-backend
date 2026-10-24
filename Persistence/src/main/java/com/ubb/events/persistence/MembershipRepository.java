@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MembershipRepository extends JpaRepository<Membership, Long> {
     Optional<Membership> findByUserIdAndOrganizationId(Long userId, Long organizationId);
+    Optional<Membership> findByIdAndOrganizationId(Long id, Long organizationId);
     List<Membership> findAllByUserId(Long userId);
     List<Membership> findAllByOrganizationIdAndStatus(Long organizationId, MembershipStatus status);
 }

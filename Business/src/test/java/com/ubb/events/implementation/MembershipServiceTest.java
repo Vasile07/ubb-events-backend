@@ -6,7 +6,12 @@ import com.ubb.events.domain.MembershipStatus;
 import com.ubb.events.domain.Organization;
 import com.ubb.events.domain.User;
 import com.ubb.events.dto.MembershipRequestResponse;
+import com.ubb.events.dto.MembershipDecisionRequest;
+import com.ubb.events.dto.MembershipDecisionResponse;
+import com.ubb.events.dto.MembershipDecisionStatus;
+import com.ubb.events.domain.MembershipDecision;
 import com.ubb.events.persistence.MembershipRepository;
+import com.ubb.events.common.errors.NotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -42,5 +47,60 @@ class MembershipServiceTest {
 
         assertTrue(service.listMembershipRequests(7L, MembershipStatus.ACTIVE).isEmpty());
         verify(memberships).findAllByOrganizationIdAndStatus(7L, MembershipStatus.ACTIVE);
+    }
+
+    @Test
+    void acceptsPendingRequestByActivatingMemberAndReturnsActive() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        Membership membership = new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.PENDING);
+        when(memberships.findByIdAndOrganizationId(11L, 7L)).thenReturn(java.util.Optional.of(membership));
+
+        MembershipDecisionResponse response = service.decideMembershipRequest(7L, 11L,
+                new MembershipDecisionRequest(MembershipDecision.ACCEPTED));
+
+        assertEquals(MembershipStatus.ACTIVE, membership.getStatus());
+        assertEquals(MembershipRole.MEMBER, membership.getRole());
+        assertEquals(MembershipDecisionStatus.ACTIVE, response.getStatus());
+        verify(memberships).save(membership);
+        verify(memberships, never()).delete(any());
+    }
+
+    @Test
+    void declinesPendingRequestByDeletingItAndReturnsDeclined() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        Membership membership = new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.PENDING);
+        when(memberships.findByIdAndOrganizationId(11L, 7L)).thenReturn(java.util.Optional.of(membership));
+
+        MembershipDecisionResponse response = service.decideMembershipRequest(7L, 11L,
+                new MembershipDecisionRequest(MembershipDecision.DECLINED));
+
+        assertEquals(MembershipDecisionStatus.DECLINED, response.getStatus());
+        verify(memberships).delete(membership);
+        verify(memberships, never()).save(any());
+    }
+
+    @Test
+    void anAlreadyActiveRequestReturnsItsCurrentStatusWithoutChangingIt() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        Membership membership = new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.ACTIVE);
+        when(memberships.findByIdAndOrganizationId(11L, 7L)).thenReturn(java.util.Optional.of(membership));
+
+        MembershipDecisionResponse response = service.decideMembershipRequest(7L, 11L,
+                new MembershipDecisionRequest(MembershipDecision.DECLINED));
+
+        assertEquals(MembershipDecisionStatus.ACTIVE, response.getStatus());
+        verify(memberships, never()).delete(any());
+        verify(memberships, never()).save(any());
+    }
+
+    @Test
+    void requestOutsideOrganizationIsNotFound() {
+        when(memberships.findByIdAndOrganizationId(11L, 7L)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> service.decideMembershipRequest(7L, 11L,
+                new MembershipDecisionRequest(MembershipDecision.ACCEPTED)));
     }
 }
