@@ -79,6 +79,33 @@ class EventTaskRepositoryTest {
         assertEquals(List.of(first.getId(), second.getId()), tasks.stream().map(EventTask::getId).toList());
     }
 
+    @Test
+    void findsOnlyTasksAssignedToUserOrderedByEventDateTimeThenId() {
+        User ana = userRepository.saveAndFlush(new User(null, "Ana", "Student", "mytasks-ana@example.com", "password"));
+        User bob = userRepository.saveAndFlush(new User(null, "Bob", "Student", "mytasks-bob@example.com", "password"));
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Organization math = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event later = eventRepository.saveAndFlush(new Event(null, cs, 1L, "Later", "Description",
+                LocalDate.of(2026, 12, 1), LocalTime.of(10, 0), null, null, null, EventStatus.PUBLISHED));
+        Event earlyEvening = eventRepository.saveAndFlush(new Event(null, math, 1L, "Evening", "Description",
+                LocalDate.of(2026, 11, 20), LocalTime.of(18, 0), null, null, null, EventStatus.DRAFT));
+        Event earlyMorning = eventRepository.saveAndFlush(new Event(null, cs, 1L, "Morning", "Description",
+                LocalDate.of(2026, 11, 20), LocalTime.of(9, 0), null, null, null, EventStatus.CANCELED));
+
+        EventTask laterTask = repository.saveAndFlush(new EventTask(null, "Later task", ana, later));
+        EventTask eveningSecond = repository.saveAndFlush(new EventTask(null, "Evening second", ana, earlyEvening));
+        repository.saveAndFlush(new EventTask(null, "Bob's task", bob, earlyEvening));
+        repository.saveAndFlush(new EventTask(null, "Unassigned", null, earlyMorning));
+        EventTask morningTask = repository.saveAndFlush(new EventTask(null, "Morning task", ana, earlyMorning));
+        EventTask eveningThird = repository.saveAndFlush(new EventTask(null, "Evening third", ana, earlyEvening));
+
+        entityManager.clear();
+        List<EventTask> tasks = repository.findAllByAssignedUserIdOrderByEventDateAscEventStartTimeAscIdAsc(ana.getId());
+
+        assertEquals(List.of(morningTask.getId(), eveningSecond.getId(), eveningThird.getId(), laterTask.getId()),
+                tasks.stream().map(EventTask::getId).toList());
+    }
+
     private Event saveEvent() {
         Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
         return eventRepository.saveAndFlush(new Event(null, organization, 1L, "Hackathon", "Coding night",

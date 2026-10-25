@@ -20,4 +20,9 @@ class EventTaskServiceStructureTest {
     void serviceDeclaresEventTaskReadOperation() throws Exception {
         assertNotNull(EventTaskService.class.getDeclaredMethod("listEventTasks", Long.class, Long.class));
     }
+
+    @Test
+    void serviceDeclaresMyTasksReadOperation() throws Exception {
+        assertNotNull(EventTaskService.class.getDeclaredMethod("listMyTasks", Long.class));
+    }
 }
