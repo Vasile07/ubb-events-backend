@@ -26,7 +26,7 @@ class EventServiceStructureTest {
 
     @Test
     void serviceDeclaresDiscoverOperation() throws Exception {
-        assertNotNull(EventService.class.getDeclaredMethod("discoverEvents"));
+        assertNotNull(EventService.class.getDeclaredMethod("discoverEvents", com.ubb.events.dto.EventDiscoveryFilter.class));
     }
 
     @Test

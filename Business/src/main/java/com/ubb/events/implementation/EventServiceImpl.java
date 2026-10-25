@@ -7,14 +7,18 @@ import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.dto.ErrorDetail;
+import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.persistence.EventRepository;
+import com.ubb.events.persistence.EventSpecifications;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,10 +69,31 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    public List<EventSummaryResponse> discoverEvents() {
-        return events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED).stream()
+    public List<EventSummaryResponse> discoverEvents(EventDiscoveryFilter filter) {
+        if (filter.getFrom() != null && filter.getTo() != null && filter.getFrom().isAfter(filter.getTo())) {
+            throw new BusinessRuleException("Invalid date range",
+                    List.of(new ErrorDetail("from", "From date must not be after the to date")));
+        }
+        return events.findAll(discoverySpecification(filter), Sort.by("date", "startTime")).stream()
                 .map(EventServiceImpl::toSummaryResponse)
                 .toList();
+    }
+
+    private static Specification<Event> discoverySpecification(EventDiscoveryFilter filter) {
+        Specification<Event> specification = EventSpecifications.isPublished();
+        if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
+            specification = specification.and(EventSpecifications.matchesSearch(filter.getSearch()));
+        }
+        if (filter.getOrganizationId() != null) {
+            specification = specification.and(EventSpecifications.inOrganization(filter.getOrganizationId()));
+        }
+        if (filter.getFrom() != null) {
+            specification = specification.and(EventSpecifications.onOrAfter(filter.getFrom()));
+        }
+        if (filter.getTo() != null) {
+            specification = specification.and(EventSpecifications.onOrBefore(filter.getTo()));
+        }
+        return specification;
     }
 
     private static EventSummaryResponse toSummaryResponse(Event event) {
