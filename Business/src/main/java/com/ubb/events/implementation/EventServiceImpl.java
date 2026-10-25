@@ -7,14 +7,20 @@ import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.dto.ErrorDetail;
+import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.persistence.EventRepository;
+import com.ubb.events.persistence.EventSpecifications;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,10 +71,47 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    public List<EventSummaryResponse> discoverEvents() {
-        return events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED).stream()
-                .map(EventServiceImpl::toSummaryResponse)
-                .toList();
+    public List<EventSummaryResponse> discoverEvents(EventDiscoveryFilter filter) {
+        if (filter.getFrom() != null && filter.getTo() != null && filter.getFrom().isAfter(filter.getTo())) {
+            throw new BusinessRuleException("Invalid date range",
+                    List.of(new ErrorDetail("from", "From date must not be after the to date")));
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<Event> chronological = events.findAll(discoverySpecification(filter), Sort.by("date", "startTime"));
+        List<Event> upcoming = new ArrayList<>();
+        List<Event> completed = new ArrayList<>();
+        for (Event event : chronological) {
+            (hasEnded(event, now) ? completed : upcoming).add(event);
+        }
+        Collections.reverse(completed);
+
+        List<EventSummaryResponse> result = new ArrayList<>();
+        upcoming.forEach(event -> result.add(toSummaryResponse(event)));
+        completed.forEach(event -> result.add(toSummaryResponse(event)));
+        return result;
+    }
+
+    // An event has ended when its end (or its start, if it has no end time) is not after now.
+    private static boolean hasEnded(Event event, LocalDateTime now) {
+        LocalTime end = event.getEndTime() != null ? event.getEndTime() : event.getStartTime();
+        return !LocalDateTime.of(event.getDate(), end).isAfter(now);
+    }
+
+    private static Specification<Event> discoverySpecification(EventDiscoveryFilter filter) {
+        Specification<Event> specification = EventSpecifications.isPublished();
+        if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
+            specification = specification.and(EventSpecifications.matchesSearch(filter.getSearch()));
+        }
+        if (filter.getOrganizationId() != null) {
+            specification = specification.and(EventSpecifications.inOrganization(filter.getOrganizationId()));
+        }
+        if (filter.getFrom() != null) {
+            specification = specification.and(EventSpecifications.onOrAfter(filter.getFrom()));
+        }
+        if (filter.getTo() != null) {
+            specification = specification.and(EventSpecifications.onOrBefore(filter.getTo()));
+        }
+        return specification;
     }
 
     private static EventSummaryResponse toSummaryResponse(Event event) {

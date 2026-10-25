@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
@@ -102,7 +104,7 @@ class EventRepositoryTest {
     }
 
     @Test
-    void findsOnlyPublishedEventsOfAllOrganizationsChronologically() {
+    void withoutCriteriaReturnsAllPublishedEventsChronologically() {
         Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
         Organization math = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
         Event later = repository.saveAndFlush(event(cs, "Later", DATE.plusDays(1), START, EventStatus.PUBLISHED));
@@ -111,11 +113,96 @@ class EventRepositoryTest {
         repository.saveAndFlush(event(math, "Canceled", DATE, START, EventStatus.CANCELED));
         Event morning = repository.saveAndFlush(event(cs, "Morning", DATE, START.minusHours(8), EventStatus.PUBLISHED));
 
-        entityManager.clear();
-        List<Event> events = repository.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED);
+        assertEquals(List.of(morning.getId(), evening.getId(), later.getId()), discover());
+    }
 
-        assertEquals(List.of(morning.getId(), evening.getId(), later.getId()),
-                events.stream().map(Event::getId).toList());
+    @Test
+    void searchMatchesEventTitleCaseInsensitively() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Event hackathon = repository.saveAndFlush(event(cs, "Spring Hackathon", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "Workshop", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "Draft hackathon", DATE, START, EventStatus.DRAFT));
+
+        assertEquals(List.of(hackathon.getId()), discover(EventSpecifications.matchesSearch("HACK")));
+    }
+
+    @Test
+    void searchMatchesOrganizationName() {
+        Organization robotics = organizationRepository.saveAndFlush(new Organization(null, "Robotics Club", null, null));
+        Organization math = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event meetup = repository.saveAndFlush(event(robotics, "Meetup", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(math, "Quiz", DATE, START, EventStatus.PUBLISHED));
+
+        assertEquals(List.of(meetup.getId()), discover(EventSpecifications.matchesSearch("robotics")));
+    }
+
+    @Test
+    void searchTreatsWildcardsLiterally() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Event discount = repository.saveAndFlush(event(cs, "100% fun_night", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "100 fun night", DATE, START, EventStatus.PUBLISHED));
+
+        assertEquals(List.of(discount.getId()), discover(EventSpecifications.matchesSearch("0% fun_")));
+    }
+
+    @Test
+    void filtersByOrganization() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Organization math = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event csEvent = repository.saveAndFlush(event(cs, "CS event", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(math, "Math event", DATE, START, EventStatus.PUBLISHED));
+
+        assertEquals(List.of(csEvent.getId()), discover(EventSpecifications.inOrganization(cs.getId())));
+        assertEquals(List.of(), discover(EventSpecifications.inOrganization(-1L)));
+    }
+
+    @Test
+    void filtersByInclusiveDateRange() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Event before = repository.saveAndFlush(event(cs, "Before", DATE.minusDays(1), START, EventStatus.PUBLISHED));
+        Event first = repository.saveAndFlush(event(cs, "First day", DATE, START, EventStatus.PUBLISHED));
+        Event last = repository.saveAndFlush(event(cs, "Last day", DATE.plusDays(2), START, EventStatus.PUBLISHED));
+        Event after = repository.saveAndFlush(event(cs, "After", DATE.plusDays(3), START, EventStatus.PUBLISHED));
+
+        assertEquals(List.of(first.getId(), last.getId()),
+                discover(EventSpecifications.onOrAfter(DATE), EventSpecifications.onOrBefore(DATE.plusDays(2))));
+        assertEquals(List.of(first.getId(), last.getId(), after.getId()), discover(EventSpecifications.onOrAfter(DATE)));
+        assertEquals(List.of(before.getId(), first.getId()), discover(EventSpecifications.onOrBefore(DATE)));
+    }
+
+    @Test
+    void combinesAllCriteria() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Organization math = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event match = repository.saveAndFlush(event(cs, "Hackathon", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "Hackathon", DATE.plusDays(10), START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(math, "Hackathon", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "Workshop", DATE, START, EventStatus.PUBLISHED));
+
+        assertEquals(List.of(match.getId()), discover(
+                EventSpecifications.matchesSearch("hack"),
+                EventSpecifications.inOrganization(cs.getId()),
+                EventSpecifications.onOrAfter(DATE),
+                EventSpecifications.onOrBefore(DATE.plusDays(1))));
+    }
+
+    @Test
+    void searchIsTrimmed() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Event hackathon = repository.saveAndFlush(event(cs, "Hackathon", DATE, START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "Workshop", DATE, START, EventStatus.PUBLISHED));
+
+        assertEquals(List.of(hackathon.getId()), discover(EventSpecifications.matchesSearch("  hack ")));
+    }
+
+    @SafeVarargs
+    private List<Long> discover(Specification<Event>... criteria) {
+        entityManager.clear();
+        Specification<Event> specification = EventSpecifications.isPublished();
+        for (Specification<Event> criterion : criteria) {
+            specification = specification == null ? criterion : specification.and(criterion);
+        }
+        return repository.findAll(specification, Sort.by("date", "startTime")).stream().map(Event::getId).toList();
     }
 
     private static Event event(Organization organization, String title, LocalDate date, LocalTime startTime, EventStatus status) {

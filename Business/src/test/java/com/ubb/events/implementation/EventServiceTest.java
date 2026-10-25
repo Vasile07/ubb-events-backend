@@ -7,15 +7,20 @@ import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.domain.Organization;
 import com.ubb.events.dto.ErrorDetail;
+import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.persistence.EventRepository;
+import com.ubb.events.persistence.EventSpecifications;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -33,7 +38,7 @@ class EventServiceTest {
     private static final LocalDate DATE = LocalDate.of(2026, 11, 20);
     private static final LocalTime START = LocalTime.of(18, 0);
 
-    // "Now" for the publish rules: 1 November 2026, 10:00 in Cluj (UTC+2 in November).
+    // "Now" for the time-based rules (publish, upcoming/completed order): 1 November 2026, 10:00 in Cluj (UTC+2 in November).
     private static final ZoneId CLUJ = ZoneId.of("Europe/Bucharest");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-01T08:00:00Z"), CLUJ);
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 1);
@@ -53,31 +58,138 @@ class EventServiceTest {
                 DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT);
     }
 
+    private static final EventDiscoveryFilter NO_FILTER = new EventDiscoveryFilter(null, null, null, null);
+    private static final Sort CHRONOLOGICAL = Sort.by("date", "startTime");
+
     @Test
-    void discoversPublishedEventsAsSummaries() {
+    void discoversPublishedEventsAsSummariesSortedChronologically() {
         Organization math = new Organization(8L, "Math club", null, null);
         Event hackathon = new Event(1L, organization, 3L, "Hackathon", "Coding night",
                 DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.PUBLISHED);
         Event quiz = new Event(2L, math, 4L, "Quiz", "Math quiz",
                 DATE.plusDays(1), START, null, null, null, EventStatus.PUBLISHED);
-        when(events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED)).thenReturn(List.of(hackathon, quiz));
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of(hackathon, quiz));
 
-        List<EventSummaryResponse> result = service.discoverEvents();
+        List<EventSummaryResponse> result = service.discoverEvents(NO_FILTER);
 
         assertEquals(List.of(
                 new EventSummaryResponse(1L, "Hackathon", DATE, START, LocalTime.of(22, 0), "Room 1", EventStatus.PUBLISHED,
                         new EventOrganizationSummaryResponse(7L, "Students")),
                 new EventSummaryResponse(2L, "Quiz", DATE.plusDays(1), START, null, null, EventStatus.PUBLISHED,
                         new EventOrganizationSummaryResponse(8L, "Math club"))), result);
-        verify(events).findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED);
+        verify(events).findAll(any(Specification.class), eq(CHRONOLOGICAL));
     }
 
     @Test
-    void discoverReturnsEmptyListWhenNothingPublished() {
-        when(events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED)).thenReturn(List.of());
+    void discoverReturnsEmptyListWhenNothingMatches() {
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of());
 
-        assertTrue(service.discoverEvents().isEmpty());
-        verify(events).findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED);
+        assertTrue(service.discoverEvents(new EventDiscoveryFilter("nothing", 7L, DATE, DATE)).isEmpty());
+        verify(events).findAll(any(Specification.class), eq(CHRONOLOGICAL));
+    }
+
+    @Test
+    void rejectsFromAfterTo() {
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.discoverEvents(new EventDiscoveryFilter(null, null, DATE.plusDays(1), DATE)));
+
+        assertEquals("Invalid date range", exception.getMessage());
+        assertEquals(List.of("from"), fields(exception));
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void acceptsSingleDayAndOpenEndedRanges() {
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of());
+
+        assertTrue(service.discoverEvents(new EventDiscoveryFilter(null, null, DATE, DATE)).isEmpty());
+        assertTrue(service.discoverEvents(new EventDiscoveryFilter(null, null, DATE, null)).isEmpty());
+        assertTrue(service.discoverEvents(new EventDiscoveryFilter(null, null, null, DATE)).isEmpty());
+        verify(events, times(3)).findAll(any(Specification.class), eq(CHRONOLOGICAL));
+    }
+
+    @Test
+    void ordersUpcomingFirstThenCompletedMostRecentFirst() {
+        // The repository returns the chronological order (date, startTime), as the database query does.
+        Event oldest = published(1L, LocalDate.of(2026, 10, 1), LocalTime.of(18, 0), LocalTime.of(20, 0));
+        Event lastMonth = published(2L, LocalDate.of(2026, 10, 20), LocalTime.of(18, 0), LocalTime.of(20, 0));
+        Event endedThisMorning = published(3L, TODAY, LocalTime.of(8, 0), LocalTime.of(9, 0));
+        Event runningNow = published(4L, TODAY, LocalTime.of(9, 0), LocalTime.of(11, 0));
+        Event laterToday = published(5L, TODAY, LocalTime.of(18, 0), LocalTime.of(20, 0));
+        Event nextMonth = published(6L, LocalDate.of(2026, 12, 1), LocalTime.of(18, 0), LocalTime.of(20, 0));
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL)))
+                .thenReturn(List.of(oldest, lastMonth, endedThisMorning, runningNow, laterToday, nextMonth));
+
+        assertEquals(List.of(4L, 5L, 6L, 3L, 2L, 1L), ids(service.discoverEvents(NO_FILTER)));
+    }
+
+    @Test
+    void usesStartTimeWhenEndTimeIsMissing() {
+        Event startedEarlier = published(1L, TODAY, LocalTime.of(9, 0), null);
+        Event startsLater = published(2L, TODAY, LocalTime.of(11, 0), null);
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of(startedEarlier, startsLater));
+
+        assertEquals(List.of(2L, 1L), ids(service.discoverEvents(NO_FILTER)));
+    }
+
+    @Test
+    void eventEndingExactlyNowIsCompleted() {
+        Event endsNow = published(1L, TODAY, LocalTime.of(9, 0), LocalTime.of(10, 0));
+        Event endsInOneMinute = published(2L, TODAY, LocalTime.of(9, 30), LocalTime.of(10, 1));
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of(endsNow, endsInOneMinute));
+
+        assertEquals(List.of(2L, 1L), ids(service.discoverEvents(NO_FILTER)));
+    }
+
+    private Event published(Long id, LocalDate date, LocalTime start, LocalTime end) {
+        return new Event(id, organization, 3L, "Event " + id, "Description", date, start, end, "Room", 10L, EventStatus.PUBLISHED);
+    }
+
+    private static List<Long> ids(List<EventSummaryResponse> summaries) {
+        return summaries.stream().map(EventSummaryResponse::getId).toList();
+    }
+
+    @Test
+    void combinesPublishedWithEveryGivenCriterion() {
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of());
+
+        try (MockedStatic<EventSpecifications> specifications = mockStatic(EventSpecifications.class, CALLS_REAL_METHODS)) {
+            service.discoverEvents(new EventDiscoveryFilter("hack", 7L, DATE, DATE.plusDays(1)));
+
+            specifications.verify(EventSpecifications::isPublished);
+            specifications.verify(() -> EventSpecifications.matchesSearch("hack"));
+            specifications.verify(() -> EventSpecifications.inOrganization(7L));
+            specifications.verify(() -> EventSpecifications.onOrAfter(DATE));
+            specifications.verify(() -> EventSpecifications.onOrBefore(DATE.plusDays(1)));
+        }
+    }
+
+    @Test
+    void emptyFilterOnlyRequiresPublishedAndBlankSearchIsIgnored() {
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of());
+
+        try (MockedStatic<EventSpecifications> specifications = mockStatic(EventSpecifications.class, CALLS_REAL_METHODS)) {
+            service.discoverEvents(NO_FILTER);
+            service.discoverEvents(new EventDiscoveryFilter("   ", null, null, null));
+
+            specifications.verify(EventSpecifications::isPublished, times(2));
+            specifications.verify(() -> EventSpecifications.matchesSearch(anyString()), never());
+            specifications.verify(() -> EventSpecifications.inOrganization(any()), never());
+            specifications.verify(() -> EventSpecifications.onOrAfter(any()), never());
+            specifications.verify(() -> EventSpecifications.onOrBefore(any()), never());
+        }
+    }
+
+    @Test
+    void openEndedRangeOnlyAddsTheGivenBound() {
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of());
+
+        try (MockedStatic<EventSpecifications> specifications = mockStatic(EventSpecifications.class, CALLS_REAL_METHODS)) {
+            service.discoverEvents(new EventDiscoveryFilter(null, null, DATE, null));
+
+            specifications.verify(() -> EventSpecifications.onOrAfter(DATE));
+            specifications.verify(() -> EventSpecifications.onOrBefore(any()), never());
+        }
     }
 
     @Test
