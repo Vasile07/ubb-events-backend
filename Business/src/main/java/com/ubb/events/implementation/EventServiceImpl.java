@@ -15,7 +15,9 @@ import com.ubb.events.persistence.EventRepository;
 import com.ubb.events.persistence.EventSpecifications;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -74,9 +76,25 @@ public class EventServiceImpl implements EventService {
             throw new BusinessRuleException("Invalid date range",
                     List.of(new ErrorDetail("from", "From date must not be after the to date")));
         }
-        return events.findAll(discoverySpecification(filter), Sort.by("date", "startTime")).stream()
-                .map(EventServiceImpl::toSummaryResponse)
-                .toList();
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<Event> chronological = events.findAll(discoverySpecification(filter), Sort.by("date", "startTime"));
+        List<Event> upcoming = new ArrayList<>();
+        List<Event> completed = new ArrayList<>();
+        for (Event event : chronological) {
+            (hasEnded(event, now) ? completed : upcoming).add(event);
+        }
+        Collections.reverse(completed);
+
+        List<EventSummaryResponse> result = new ArrayList<>();
+        upcoming.forEach(event -> result.add(toSummaryResponse(event)));
+        completed.forEach(event -> result.add(toSummaryResponse(event)));
+        return result;
+    }
+
+    // An event has ended when its end (or its start, if it has no end time) is not after now.
+    private static boolean hasEnded(Event event, LocalDateTime now) {
+        LocalTime end = event.getEndTime() != null ? event.getEndTime() : event.getStartTime();
+        return !LocalDateTime.of(event.getDate(), end).isAfter(now);
     }
 
     private static Specification<Event> discoverySpecification(EventDiscoveryFilter filter) {

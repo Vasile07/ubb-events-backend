@@ -38,7 +38,7 @@ class EventServiceTest {
     private static final LocalDate DATE = LocalDate.of(2026, 11, 20);
     private static final LocalTime START = LocalTime.of(18, 0);
 
-    // "Now" for the publish rules: 1 November 2026, 10:00 in Cluj (UTC+2 in November).
+    // "Now" for the time-based rules (publish, upcoming/completed order): 1 November 2026, 10:00 in Cluj (UTC+2 in November).
     private static final ZoneId CLUJ = ZoneId.of("Europe/Bucharest");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-01T08:00:00Z"), CLUJ);
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 1);
@@ -106,6 +106,47 @@ class EventServiceTest {
         assertTrue(service.discoverEvents(new EventDiscoveryFilter(null, null, DATE, null)).isEmpty());
         assertTrue(service.discoverEvents(new EventDiscoveryFilter(null, null, null, DATE)).isEmpty());
         verify(events, times(3)).findAll(any(Specification.class), eq(CHRONOLOGICAL));
+    }
+
+    @Test
+    void ordersUpcomingFirstThenCompletedMostRecentFirst() {
+        // The repository returns the chronological order (date, startTime), as the database query does.
+        Event oldest = published(1L, LocalDate.of(2026, 10, 1), LocalTime.of(18, 0), LocalTime.of(20, 0));
+        Event lastMonth = published(2L, LocalDate.of(2026, 10, 20), LocalTime.of(18, 0), LocalTime.of(20, 0));
+        Event endedThisMorning = published(3L, TODAY, LocalTime.of(8, 0), LocalTime.of(9, 0));
+        Event runningNow = published(4L, TODAY, LocalTime.of(9, 0), LocalTime.of(11, 0));
+        Event laterToday = published(5L, TODAY, LocalTime.of(18, 0), LocalTime.of(20, 0));
+        Event nextMonth = published(6L, LocalDate.of(2026, 12, 1), LocalTime.of(18, 0), LocalTime.of(20, 0));
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL)))
+                .thenReturn(List.of(oldest, lastMonth, endedThisMorning, runningNow, laterToday, nextMonth));
+
+        assertEquals(List.of(4L, 5L, 6L, 3L, 2L, 1L), ids(service.discoverEvents(NO_FILTER)));
+    }
+
+    @Test
+    void usesStartTimeWhenEndTimeIsMissing() {
+        Event startedEarlier = published(1L, TODAY, LocalTime.of(9, 0), null);
+        Event startsLater = published(2L, TODAY, LocalTime.of(11, 0), null);
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of(startedEarlier, startsLater));
+
+        assertEquals(List.of(2L, 1L), ids(service.discoverEvents(NO_FILTER)));
+    }
+
+    @Test
+    void eventEndingExactlyNowIsCompleted() {
+        Event endsNow = published(1L, TODAY, LocalTime.of(9, 0), LocalTime.of(10, 0));
+        Event endsInOneMinute = published(2L, TODAY, LocalTime.of(9, 30), LocalTime.of(10, 1));
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of(endsNow, endsInOneMinute));
+
+        assertEquals(List.of(2L, 1L), ids(service.discoverEvents(NO_FILTER)));
+    }
+
+    private Event published(Long id, LocalDate date, LocalTime start, LocalTime end) {
+        return new Event(id, organization, 3L, "Event " + id, "Description", date, start, end, "Room", 10L, EventStatus.PUBLISHED);
+    }
+
+    private static List<Long> ids(List<EventSummaryResponse> summaries) {
+        return summaries.stream().map(EventSummaryResponse::getId).toList();
     }
 
     @Test
