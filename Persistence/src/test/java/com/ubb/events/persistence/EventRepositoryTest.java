@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -70,6 +71,38 @@ class EventRepositoryTest {
         assertRejected(new Event(null, organization, 7L, "Title", "Description", null, START, null, null, null, EventStatus.DRAFT));
         assertRejected(new Event(null, organization, 7L, "Title", "Description", DATE, null, null, null, null, EventStatus.DRAFT));
         assertRejected(new Event(null, organization, 7L, "Title", "Description", DATE, START, null, null, null, null));
+    }
+
+    @Test
+    void findsOnlyEventsOfOrganizationOrderedByDateAndStartTime() {
+        Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Organization other = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event late = repository.saveAndFlush(event(organization, "Late", DATE.plusDays(1), START, EventStatus.CANCELED));
+        Event evening = repository.saveAndFlush(event(organization, "Evening", DATE, START.plusHours(2), EventStatus.PUBLISHED));
+        Event morning = repository.saveAndFlush(event(organization, "Morning", DATE, START.minusHours(8), EventStatus.DRAFT));
+        repository.saveAndFlush(event(other, "Other organization", DATE, START, EventStatus.PUBLISHED));
+
+        entityManager.clear();
+        List<Event> events = repository.findAllByOrganizationIdOrderByDateAscStartTimeAsc(organization.getId());
+
+        assertEquals(List.of(morning.getId(), evening.getId(), late.getId()),
+                events.stream().map(Event::getId).toList());
+    }
+
+    @Test
+    void findsEventByIdOnlyWithinItsOrganization() {
+        Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Organization other = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event saved = repository.saveAndFlush(event(organization, "Hackathon", DATE, START, EventStatus.DRAFT));
+
+        entityManager.clear();
+        assertEquals(saved.getId(),
+                repository.findByIdAndOrganizationId(saved.getId(), organization.getId()).orElseThrow().getId());
+        assertTrue(repository.findByIdAndOrganizationId(saved.getId(), other.getId()).isEmpty());
+    }
+
+    private static Event event(Organization organization, String title, LocalDate date, LocalTime startTime, EventStatus status) {
+        return new Event(null, organization, 1L, title, "Description", date, startTime, null, null, null, status);
     }
 
     private void assertRejected(Event event) {
