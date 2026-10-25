@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface EventTaskRepository extends JpaRepository<EventTask, Long> {
     List<EventTask> findAllByEventIdOrderByIdAsc(Long eventId);
+    List<EventTask> findAllByAssignedUserIdOrderByEventDateAscEventStartTimeAscIdAsc(Long userId);
 }

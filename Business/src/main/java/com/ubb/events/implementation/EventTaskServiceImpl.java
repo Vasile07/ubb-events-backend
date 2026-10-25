@@ -2,9 +2,14 @@ package com.ubb.events.implementation;
 
 import com.ubb.events.EventTaskService;
 import com.ubb.events.common.errors.NotFoundException;
+import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventTask;
+import com.ubb.events.domain.Organization;
 import com.ubb.events.domain.User;
 import com.ubb.events.dto.EventTaskResponse;
+import com.ubb.events.dto.MyTaskEventResponse;
+import com.ubb.events.dto.MyTaskOrganizationResponse;
+import com.ubb.events.dto.MyTaskResponse;
 import com.ubb.events.dto.TaskAssigneeResponse;
 import com.ubb.events.persistence.EventRepository;
 import com.ubb.events.persistence.EventTaskRepository;
@@ -29,6 +34,23 @@ public class EventTaskServiceImpl implements EventTaskService {
         return tasks.findAllByEventIdOrderByIdAsc(eventId).stream()
                 .map(EventTaskServiceImpl::toResponse)
                 .toList();
+    }
+
+    @Override
+    public List<MyTaskResponse> listMyTasks(Long userId) {
+        return tasks.findAllByAssignedUserIdOrderByEventDateAscEventStartTimeAscIdAsc(userId).stream()
+                .map(EventTaskServiceImpl::toMyTaskResponse)
+                .toList();
+    }
+
+    private static MyTaskResponse toMyTaskResponse(EventTask task) {
+        Event event = task.getEvent();
+        Organization organization = event.getOrganization();
+        return new MyTaskResponse(
+                task.getId(),
+                task.getDescription(),
+                new MyTaskEventResponse(event.getId(), event.getTitle(), event.getDate(), event.getStartTime(), event.getStatus()),
+                new MyTaskOrganizationResponse(organization.getId(), organization.getName()));
     }
 
     private static EventTaskResponse toResponse(EventTask task) {
