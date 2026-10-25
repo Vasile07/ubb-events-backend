@@ -6,12 +6,21 @@ import com.ubb.events.common.errors.ConflictException;
 import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
+import com.ubb.events.domain.EventTask;
+import com.ubb.events.domain.Membership;
+import com.ubb.events.domain.MembershipStatus;
+import com.ubb.events.domain.Organization;
 import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.CreateEventRequest;
+import com.ubb.events.dto.EventTaskRequest;
 import com.ubb.events.persistence.EventRepository;
+import com.ubb.events.persistence.EventTaskRepository;
+import com.ubb.events.persistence.MembershipRepository;
+import com.ubb.events.persistence.OrganizationRepository;
 import com.ubb.events.persistence.EventSpecifications;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -23,15 +32,114 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ubb.events.domain.User;
 
 @Service
 public class EventServiceImpl implements EventService {
     private final EventRepository events;
     private final Clock clock;
+    private final EventTaskRepository tasks;
+    private final MembershipRepository memberships;
+    private final OrganizationRepository organizations;
 
-    public EventServiceImpl(EventRepository events, Clock clock) {
+    public EventServiceImpl(EventRepository events, Clock clock, EventTaskRepository tasks,
+            MembershipRepository memberships, OrganizationRepository organizations) {
         this.events = events;
         this.clock = clock;
+        this.tasks = tasks;
+        this.memberships = memberships;
+        this.organizations = organizations;
+    }
+
+    @Override
+    @Transactional
+    public EventResponse createEvent(Long organizationId, CreateEventRequest request) {
+        List<ErrorDetail> errors = validateEventDetails(request);
+        if (!errors.isEmpty()) {
+            throw new BusinessRuleException("Event details are invalid", errors);
+        }
+
+        Organization organization = organizations.findById(organizationId)
+                .orElseThrow(() -> new NotFoundException("Organization not found"));
+        List<EventTaskRequest> taskRequests = request.getTasks() == null ? List.of() : request.getTasks();
+        List<Membership> assignees = new ArrayList<>();
+        for (int i = 0; i < taskRequests.size(); i++) {
+            EventTaskRequest taskRequest = taskRequests.get(i);
+            if (taskRequest == null || taskRequest.getDescription() == null || taskRequest.getDescription().isBlank()) {
+                errors.add(new ErrorDetail("tasks[" + i + "].description", "Task description is required"));
+                continue;
+            }
+            Long assigneeId = taskRequest.getAssigneeUserId();
+            if (assigneeId == null) {
+                assignees.add(null);
+                continue;
+            }
+            Membership membership = memberships.findByUserIdAndOrganizationId(assigneeId, organizationId).orElse(null);
+            if (membership == null || membership.getStatus() != MembershipStatus.ACTIVE) {
+                errors.add(new ErrorDetail("tasks[" + i + "].assigneeUserId",
+                        "Assignee must be an active member of the organization"));
+                assignees.add(null);
+            } else {
+                assignees.add(membership);
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new BusinessRuleException("Event details are invalid", errors);
+        }
+
+        Event event = new Event(null, organization, request.getCategoryId(), request.getTitle(), request.getDescription(),
+                request.getDate(), request.getStartTime(), request.getEndTime(), request.getLocation(),
+                request.getCapacity(), EventStatus.DRAFT);
+        Event savedEvent = events.save(event);
+        List<EventTask> eventTasks = new ArrayList<>();
+        for (int i = 0; i < taskRequests.size(); i++) {
+            Membership membership = assignees.get(i);
+            User assignee = membership == null ? null : membership.getUser();
+            eventTasks.add(new EventTask(null, taskRequests.get(i).getDescription(), assignee, savedEvent));
+        }
+        if (!eventTasks.isEmpty()) {
+            tasks.saveAll(eventTasks);
+        }
+        return toResponse(savedEvent);
+    }
+
+    private List<ErrorDetail> validateEventDetails(CreateEventRequest request) {
+        List<ErrorDetail> errors = new ArrayList<>();
+        if (request == null) {
+            errors.add(new ErrorDetail("event", "Event details are required"));
+            return errors;
+        }
+        if (request.getCategoryId() == null) {
+            errors.add(new ErrorDetail("categoryId", "Category is required"));
+        }
+        if (request.getTitle() == null || request.getTitle().isBlank()) {
+            errors.add(new ErrorDetail("title", "Title is required"));
+        }
+        if (request.getDescription() == null || request.getDescription().isBlank()) {
+            errors.add(new ErrorDetail("description", "Description is required"));
+        }
+        if (request.getDate() == null) {
+            errors.add(new ErrorDetail("date", "Date is required"));
+        }
+        if (request.getStartTime() == null) {
+            errors.add(new ErrorDetail("startTime", "Start time is required"));
+        }
+        if (request.getDate() != null && request.getStartTime() != null
+                && !LocalDateTime.of(request.getDate(), request.getStartTime()).isAfter(LocalDateTime.now(clock))) {
+            errors.add(new ErrorDetail("date", "Event must start in the future"));
+        }
+        if (request.getEndTime() == null) {
+            errors.add(new ErrorDetail("endTime", "End time is required"));
+        } else if (request.getStartTime() != null && !request.getEndTime().isAfter(request.getStartTime())) {
+            errors.add(new ErrorDetail("endTime", "End time must be after start time"));
+        }
+        if (request.getLocation() == null || request.getLocation().isBlank()) {
+            errors.add(new ErrorDetail("location", "Location is required"));
+        }
+        if (request.getCapacity() == null || request.getCapacity() <= 0) {
+            errors.add(new ErrorDetail("capacity", "Capacity must be greater than zero"));
+        }
+        return errors;
     }
 
     @Override

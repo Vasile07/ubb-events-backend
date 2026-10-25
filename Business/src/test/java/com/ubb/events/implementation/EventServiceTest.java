@@ -6,12 +6,22 @@ import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.domain.Organization;
+import com.ubb.events.domain.EventTask;
+import com.ubb.events.domain.Membership;
+import com.ubb.events.domain.MembershipRole;
+import com.ubb.events.domain.MembershipStatus;
+import com.ubb.events.domain.User;
 import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.CreateEventRequest;
+import com.ubb.events.dto.EventTaskRequest;
 import com.ubb.events.persistence.EventRepository;
+import com.ubb.events.persistence.EventTaskRepository;
+import com.ubb.events.persistence.MembershipRepository;
+import com.ubb.events.persistence.OrganizationRepository;
 import com.ubb.events.persistence.EventSpecifications;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,18 +54,144 @@ class EventServiceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 1);
 
     @Mock EventRepository events;
+    @Mock EventTaskRepository tasks;
+    @Mock MembershipRepository memberships;
+    @Mock OrganizationRepository organizations;
     EventServiceImpl service;
 
     private final Organization organization = new Organization(7L, "Students", null, null);
 
     @BeforeEach
     void setUp() {
-        service = new EventServiceImpl(events, CLOCK);
+        service = new EventServiceImpl(events, CLOCK, tasks, memberships, organizations);
+        lenient().when(organizations.findById(7L)).thenReturn(Optional.of(organization));
     }
 
     private Event completeDraft() {
         return new Event(1L, organization, 3L, "Hackathon", "Coding night",
                 DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT);
+    }
+
+    @Test
+    void createsDraftEventWithAssignedActiveMember() {
+        User user = new User(42L, "Ada", "Lovelace", "ada@example.com", "secret");
+        Membership membership = new Membership(1L, user, organization, MembershipRole.MEMBER, MembershipStatus.ACTIVE);
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", DATE, START,
+                LocalTime.of(22, 0), "Room 1", 50L, List.of(new EventTaskRequest("Prepare slides", 42L)));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(Optional.of(membership));
+        when(events.save(any(Event.class))).thenAnswer(invocation -> {
+            Event event = invocation.getArgument(0);
+            event.setId(1L);
+            return event;
+        });
+
+        EventResponse response = service.createEvent(7L, request);
+
+        assertEquals(EventStatus.DRAFT, response.getStatus());
+        assertEquals("Hackathon", response.getTitle());
+        verify(events).save(any(Event.class));
+        verify(tasks).saveAll(argThat((Iterable<EventTask> savedTasks) -> {
+            var iterator = savedTasks.iterator();
+            if (!iterator.hasNext()) return false;
+            EventTask savedTask = iterator.next();
+            return !iterator.hasNext() && savedTask.getDescription().equals("Prepare slides")
+                    && savedTask.getAssignedUser().equals(user);
+        }));
+    }
+
+    @Test
+    void aggregatesAllCreateValidationErrorsAndDoesNotSave() {
+        CreateEventRequest request = new CreateEventRequest(null, " ", "", TODAY, LocalTime.of(9, 0),
+                LocalTime.of(8, 0), " ", 0L, List.of());
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.createEvent(7L, request));
+
+        assertEquals(List.of("categoryId", "title", "description", "date", "endTime", "location", "capacity"), fields(exception));
+        verifyNoInteractions(events, tasks, memberships, organizations);
+    }
+
+    @Test
+    void rejectsAssigneeThatIsNotAnActiveMemberBeforeSaving() {
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", DATE, START,
+                LocalTime.of(22, 0), "Room 1", 50L, List.of(new EventTaskRequest("Prepare slides", 42L)));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(Optional.empty());
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.createEvent(7L, request));
+
+        assertEquals(List.of("tasks[0].assigneeUserId"), fields(exception));
+        verifyNoInteractions(events, tasks);
+    }
+
+    @Test
+    void createsDraftEventWithoutTasks() {
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", DATE, START,
+                LocalTime.of(22, 0), "Room 1", 50L, null);
+        when(events.save(any(Event.class))).thenAnswer(invocation -> {
+            Event event = invocation.getArgument(0);
+            event.setId(2L);
+            return event;
+        });
+
+        EventResponse response = service.createEvent(7L, request);
+
+        assertEquals(2L, response.getId());
+        assertEquals(EventStatus.DRAFT, response.getStatus());
+        verify(events).save(argThat(event -> event.getOrganization().equals(organization)
+                && event.getCategoryId().equals(3L) && event.getStatus() == EventStatus.DRAFT));
+        verifyNoInteractions(tasks, memberships);
+    }
+
+    @Test
+    void rejectsMissingStartTimeAndEndTime() {
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", TODAY, null,
+                null, "Room 1", 50L, List.of());
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.createEvent(7L, request));
+
+        assertEquals(List.of("startTime", "endTime"), fields(exception));
+        verifyNoInteractions(events, tasks, memberships, organizations);
+    }
+
+    @Test
+    void rejectsStartAtCurrentTime() {
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", TODAY,
+                LocalTime.of(10, 0), LocalTime.of(11, 0), "Room 1", 50L, List.of());
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.createEvent(7L, request));
+
+        assertEquals(List.of("date"), fields(exception));
+        verifyNoInteractions(events, tasks, memberships, organizations);
+    }
+
+    @Test
+    void rejectsInactiveAssigneeBeforeSavingEvent() {
+        User user = new User(42L, "Ada", "Lovelace", "ada@example.com", "secret");
+        Membership membership = new Membership(1L, user, organization, MembershipRole.MEMBER, MembershipStatus.PENDING);
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", DATE, START,
+                LocalTime.of(22, 0), "Room 1", 50L, List.of(new EventTaskRequest("Prepare slides", 42L)));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(Optional.of(membership));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.createEvent(7L, request));
+
+        assertEquals(List.of("tasks[0].assigneeUserId"), fields(exception));
+        verifyNoInteractions(events, tasks);
+    }
+
+    @Test
+    void rejectsBlankTaskDescriptionBeforeSavingEvent() {
+        CreateEventRequest request = new CreateEventRequest(3L, "Hackathon", "Coding night", DATE, START,
+                LocalTime.of(22, 0), "Room 1", 50L, List.of(new EventTaskRequest(" ", null)));
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.createEvent(7L, request));
+
+        assertEquals(List.of("tasks[0].description"), fields(exception));
+        verifyNoInteractions(events, tasks, memberships);
     }
 
     private static final EventDiscoveryFilter NO_FILTER = new EventDiscoveryFilter(null, null, null, null);
