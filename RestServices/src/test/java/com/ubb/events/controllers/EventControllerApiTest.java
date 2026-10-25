@@ -181,21 +181,19 @@ class EventControllerApiTest {
     }
 
     @Test
-    void incompleteDraftReturnsBadRequestWithFieldErrors() throws Exception {
+    void pastEventReturnsBadRequestWithDateError() throws Exception {
         when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
         when(eventService.publishEvent(7L, 1L)).thenThrow(new BusinessRuleException("Event is not ready to be published", List.of(
-                new ErrorDetail("endTime", "End time is required"),
-                new ErrorDetail("location", "Location is required"))));
+                new ErrorDetail("date", "Event must start in the future"))));
 
         mockMvc.perform(patch(PUBLISH_URL)
                         .header("Authorization", "Bearer " + tokenService.issue(43L)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Event is not ready to be published"))
-                .andExpect(jsonPath("$.errors.length()").value(2))
-                .andExpect(jsonPath("$.errors[0].field").value("endTime"))
-                .andExpect(jsonPath("$.errors[0].message").value("End time is required"))
-                .andExpect(jsonPath("$.errors[1].field").value("location"));
+                .andExpect(jsonPath("$.errors.length()").value(1))
+                .andExpect(jsonPath("$.errors[0].field").value("date"))
+                .andExpect(jsonPath("$.errors[0].message").value("Event must start in the future"));
     }
 
     @Test

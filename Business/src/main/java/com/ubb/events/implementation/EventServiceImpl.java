@@ -126,42 +126,15 @@ public class EventServiceImpl implements EventService {
                 new EventOrganizationSummaryResponse(event.getOrganization().getId(), event.getOrganization().getName()));
     }
 
+    // Field validation (title, description, end time, location, capacity) is done when the event is
+    // created (T23) and edited (T26); publishing only rejects an event that does not start in the future.
     private List<ErrorDetail> validateForPublication(Event event) {
         List<ErrorDetail> errors = new ArrayList<>();
-        if (isBlank(event.getTitle())) {
-            errors.add(new ErrorDetail("title", "Title is required"));
-        }
-        if (isBlank(event.getDescription())) {
-            errors.add(new ErrorDetail("description", "Description is required"));
-        }
-        if (event.getDate() == null) {
-            errors.add(new ErrorDetail("date", "Date is required"));
-        }
-        if (event.getStartTime() == null) {
-            errors.add(new ErrorDetail("startTime", "Start time is required"));
-        }
         if (event.getDate() != null && event.getStartTime() != null
                 && !LocalDateTime.of(event.getDate(), event.getStartTime()).isAfter(LocalDateTime.now(clock))) {
             errors.add(new ErrorDetail("date", "Event must start in the future"));
         }
-        if (event.getEndTime() == null) {
-            errors.add(new ErrorDetail("endTime", "End time is required"));
-        } else if (event.getStartTime() != null && !event.getEndTime().isAfter(event.getStartTime())) {
-            errors.add(new ErrorDetail("endTime", "End time must be after the start time"));
-        }
-        if (isBlank(event.getLocation())) {
-            errors.add(new ErrorDetail("location", "Location is required"));
-        }
-        if (event.getCapacity() == null) {
-            errors.add(new ErrorDetail("capacity", "Capacity is required"));
-        } else if (event.getCapacity() <= 0) {
-            errors.add(new ErrorDetail("capacity", "Capacity must be a positive number"));
-        }
         return errors;
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     private static EventResponse toResponse(Event event) {
