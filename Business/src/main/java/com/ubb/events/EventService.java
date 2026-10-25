@@ -6,4 +6,5 @@ import java.util.List;
 public interface EventService {
     List<EventResponse> listOrganizationEvents(Long organizationId);
     EventResponse getOrganizationEvent(Long organizationId, Long eventId);
+    EventResponse publishEvent(Long organizationId, Long eventId);
 }

@@ -5,6 +5,7 @@ import com.ubb.events.EventService;
 import com.ubb.events.security.RequireOrgPermission;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,6 +32,15 @@ class EventControllerStructureTest {
     void detailHandlerIsMappedForOrganizationMembers() throws Exception {
         assertMemberGet(EventController.class.getDeclaredMethod("getOrganizationEvent", Long.class, Long.class),
                 "/{organizationId}/events/{eventId}");
+    }
+
+    @Test
+    void publishHandlerIsMappedForManagersOnly() throws Exception {
+        Method method = EventController.class.getDeclaredMethod("publishEvent", Long.class, Long.class);
+        assertNotNull(method.getAnnotation(PatchMapping.class), "publishEvent must be a PATCH handler");
+        assertEquals("/{organizationId}/events/{eventId}/publish", method.getAnnotation(PatchMapping.class).value()[0]);
+        assertNotNull(method.getAnnotation(RequireOrgPermission.class), "publishEvent must require organization permission");
+        assertEquals(EffectiveOrgRole.MANAGER, method.getAnnotation(RequireOrgPermission.class).value());
     }
 
     private static void assertMemberGet(Method method, String path) {

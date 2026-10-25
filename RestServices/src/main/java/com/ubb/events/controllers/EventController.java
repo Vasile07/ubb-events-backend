@@ -1,5 +1,6 @@
 package com.ubb.events.controllers;
 
+import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.EventService;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.security.RequireOrgPermission;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,5 +49,20 @@ public class EventController {
     })
     public ResponseEntity<EventResponse> getOrganizationEvent(@PathVariable Long organizationId, @PathVariable Long eventId) {
         return ResponseEntity.ok(eventService.getOrganizationEvent(organizationId, eventId));
+    }
+
+    @PatchMapping("/{organizationId}/events/{eventId}/publish")
+    @RequireOrgPermission(EffectiveOrgRole.MANAGER)
+    @Operation(summary = "Publish a draft event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Event published and returned"),
+            @ApiResponse(responseCode = "400", description = "Event does not start in the future"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Manager organization access required"),
+            @ApiResponse(responseCode = "404", description = "Event not found"),
+            @ApiResponse(responseCode = "409", description = "Event is already published or canceled")
+    })
+    public ResponseEntity<EventResponse> publishEvent(@PathVariable Long organizationId, @PathVariable Long eventId) {
+        return ResponseEntity.ok(eventService.publishEvent(organizationId, eventId));
     }
 }
