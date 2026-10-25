@@ -56,7 +56,7 @@ public class EventController {
     @Operation(summary = "Publish a draft event")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Event published and returned"),
-            @ApiResponse(responseCode = "400", description = "Event is not ready to be published; errors list the fields to correct"),
+            @ApiResponse(responseCode = "400", description = "Event does not start in the future"),
             @ApiResponse(responseCode = "401", description = "Authentication required"),
             @ApiResponse(responseCode = "403", description = "Manager organization access required"),
             @ApiResponse(responseCode = "404", description = "Event not found"),

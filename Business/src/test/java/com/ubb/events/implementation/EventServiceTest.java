@@ -95,55 +95,36 @@ class EventServiceTest {
     }
 
     @Test
-    void rejectsIncompleteDraftListingEveryFieldToCorrect() {
+    void publishOnlyChecksTheStartIsInTheFuture() {
+        // Field validation (title, description, end time, location, capacity) belongs to create (T23)
+        // and edit (T26); publishing only rejects events that do not start in the future.
         Event draft = completeDraft();
-        draft.setEndTime(null);
+        draft.setTitle(" ");
+        draft.setDescription("");
+        draft.setEndTime(START.minusHours(1));
         draft.setLocation("  ");
-        draft.setCapacity(null);
+        draft.setCapacity(0L);
         when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
+        when(events.save(draft)).thenReturn(draft);
+
+        assertEquals(EventStatus.PUBLISHED, service.publishEvent(7L, 1L).getStatus());
+        verify(events).save(draft);
+    }
+
+    @Test
+    void pastStartIsTheOnlyPublishValidationError() {
+        Event pastAndIncomplete = completeDraft();
+        pastAndIncomplete.setDate(TODAY);
+        pastAndIncomplete.setStartTime(LocalTime.of(9, 0));
+        pastAndIncomplete.setEndTime(null);
+        pastAndIncomplete.setLocation(null);
+        pastAndIncomplete.setCapacity(null);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(pastAndIncomplete));
 
         BusinessRuleException exception = assertThrows(BusinessRuleException.class, () -> service.publishEvent(7L, 1L));
 
         assertEquals("Event is not ready to be published", exception.getMessage());
-        assertEquals(List.of("endTime", "location", "capacity"), fields(exception));
-        assertTrue(exception.getErrors().stream().allMatch(error -> error.getMessage() != null && !error.getMessage().isBlank()));
-        assertEquals(EventStatus.DRAFT, draft.getStatus());
-        verify(events, never()).save(any());
-    }
-
-    @Test
-    void rejectsEndTimeNotAfterStartTime() {
-        Event equal = completeDraft();
-        equal.setEndTime(START);
-        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(equal));
-        assertEquals(List.of("endTime"), fields(assertThrows(BusinessRuleException.class, () -> service.publishEvent(7L, 1L))));
-
-        Event before = completeDraft();
-        before.setEndTime(START.minusHours(1));
-        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(before));
-        assertEquals(List.of("endTime"), fields(assertThrows(BusinessRuleException.class, () -> service.publishEvent(7L, 1L))));
-        verify(events, never()).save(any());
-    }
-
-    @Test
-    void rejectsNonPositiveCapacity() {
-        Event draft = completeDraft();
-        draft.setCapacity(0L);
-        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
-
-        assertEquals(List.of("capacity"), fields(assertThrows(BusinessRuleException.class, () -> service.publishEvent(7L, 1L))));
-        verify(events, never()).save(any());
-    }
-
-    @Test
-    void rejectsBlankTitleOrDescription() {
-        Event draft = completeDraft();
-        draft.setTitle(" ");
-        draft.setDescription("");
-        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
-
-        assertEquals(List.of("title", "description"),
-                fields(assertThrows(BusinessRuleException.class, () -> service.publishEvent(7L, 1L))));
+        assertEquals(List.of("date"), fields(exception));
         verify(events, never()).save(any());
     }
 
