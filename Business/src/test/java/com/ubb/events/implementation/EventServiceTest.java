@@ -7,7 +7,9 @@ import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.domain.Organization;
 import com.ubb.events.dto.ErrorDetail;
+import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.persistence.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +51,33 @@ class EventServiceTest {
     private Event completeDraft() {
         return new Event(1L, organization, 3L, "Hackathon", "Coding night",
                 DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT);
+    }
+
+    @Test
+    void discoversPublishedEventsAsSummaries() {
+        Organization math = new Organization(8L, "Math club", null, null);
+        Event hackathon = new Event(1L, organization, 3L, "Hackathon", "Coding night",
+                DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.PUBLISHED);
+        Event quiz = new Event(2L, math, 4L, "Quiz", "Math quiz",
+                DATE.plusDays(1), START, null, null, null, EventStatus.PUBLISHED);
+        when(events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED)).thenReturn(List.of(hackathon, quiz));
+
+        List<EventSummaryResponse> result = service.discoverEvents();
+
+        assertEquals(List.of(
+                new EventSummaryResponse(1L, "Hackathon", DATE, START, LocalTime.of(22, 0), "Room 1", EventStatus.PUBLISHED,
+                        new EventOrganizationSummaryResponse(7L, "Students")),
+                new EventSummaryResponse(2L, "Quiz", DATE.plusDays(1), START, null, null, EventStatus.PUBLISHED,
+                        new EventOrganizationSummaryResponse(8L, "Math club"))), result);
+        verify(events).findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED);
+    }
+
+    @Test
+    void discoverReturnsEmptyListWhenNothingPublished() {
+        when(events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED)).thenReturn(List.of());
+
+        assertTrue(service.discoverEvents().isEmpty());
+        verify(events).findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED);
     }
 
     @Test

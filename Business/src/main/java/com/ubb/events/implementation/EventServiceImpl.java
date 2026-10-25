@@ -7,7 +7,9 @@ import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.domain.Event;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.dto.ErrorDetail;
+import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.persistence.EventRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -60,6 +62,25 @@ public class EventServiceImpl implements EventService {
 
         event.setStatus(EventStatus.PUBLISHED);
         return toResponse(events.save(event));
+    }
+
+    @Override
+    public List<EventSummaryResponse> discoverEvents() {
+        return events.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED).stream()
+                .map(EventServiceImpl::toSummaryResponse)
+                .toList();
+    }
+
+    private static EventSummaryResponse toSummaryResponse(Event event) {
+        return new EventSummaryResponse(
+                event.getId(),
+                event.getTitle(),
+                event.getDate(),
+                event.getStartTime(),
+                event.getEndTime(),
+                event.getLocation(),
+                event.getStatus(),
+                new EventOrganizationSummaryResponse(event.getOrganization().getId(), event.getOrganization().getName()));
     }
 
     // Field validation (title, description, end time, location, capacity) is done when the event is

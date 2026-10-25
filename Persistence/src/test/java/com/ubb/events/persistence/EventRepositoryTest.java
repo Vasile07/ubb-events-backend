@@ -101,6 +101,23 @@ class EventRepositoryTest {
         assertTrue(repository.findByIdAndOrganizationId(saved.getId(), other.getId()).isEmpty());
     }
 
+    @Test
+    void findsOnlyPublishedEventsOfAllOrganizationsChronologically() {
+        Organization cs = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        Organization math = organizationRepository.saveAndFlush(new Organization(null, "UBB Math", null, null));
+        Event later = repository.saveAndFlush(event(cs, "Later", DATE.plusDays(1), START, EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(cs, "Draft", DATE, START, EventStatus.DRAFT));
+        Event evening = repository.saveAndFlush(event(math, "Evening", DATE, START.plusHours(2), EventStatus.PUBLISHED));
+        repository.saveAndFlush(event(math, "Canceled", DATE, START, EventStatus.CANCELED));
+        Event morning = repository.saveAndFlush(event(cs, "Morning", DATE, START.minusHours(8), EventStatus.PUBLISHED));
+
+        entityManager.clear();
+        List<Event> events = repository.findAllByStatusOrderByDateAscStartTimeAsc(EventStatus.PUBLISHED);
+
+        assertEquals(List.of(morning.getId(), evening.getId(), later.getId()),
+                events.stream().map(Event::getId).toList());
+    }
+
     private static Event event(Organization organization, String title, LocalDate date, LocalTime startTime, EventStatus status) {
         return new Event(null, organization, 1L, title, "Description", date, startTime, null, null, null, status);
     }
