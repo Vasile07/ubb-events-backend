@@ -1,22 +1,42 @@
 package com.ubb.events.controllers;
 
+import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.EventService;
+import com.ubb.events.security.RequireOrgPermission;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class EventControllerStructureTest {
     @Test
-    void controllerDefinesRootMappingAndServiceDependencyWithoutHandlers() throws Exception {
+    void controllerIsOrganizationScopedWithServiceDependency() throws Exception {
         assertTrue(EventController.class.isAnnotationPresent(RestController.class));
         assertNotNull(EventController.class.getAnnotation(RequestMapping.class));
-        assertEquals("/api/events", EventController.class.getAnnotation(RequestMapping.class).value()[0]);
-        assertEquals(0, EventController.class.getDeclaredMethods().length);
-        Constructor<?> constructor = EventController.class.getDeclaredConstructor(EventService.class);
-        assertNotNull(constructor);
+        assertEquals("/api/organizations", EventController.class.getAnnotation(RequestMapping.class).value()[0]);
+        assertNotNull(EventController.class.getDeclaredConstructor(EventService.class));
+    }
+
+    @Test
+    void listHandlerIsMappedForOrganizationMembers() throws Exception {
+        assertMemberGet(EventController.class.getDeclaredMethod("listOrganizationEvents", Long.class),
+                "/{organizationId}/events");
+    }
+
+    @Test
+    void detailHandlerIsMappedForOrganizationMembers() throws Exception {
+        assertMemberGet(EventController.class.getDeclaredMethod("getOrganizationEvent", Long.class, Long.class),
+                "/{organizationId}/events/{eventId}");
+    }
+
+    private static void assertMemberGet(Method method, String path) {
+        assertNotNull(method.getAnnotation(GetMapping.class), method.getName() + " must be a GET handler");
+        assertEquals(path, method.getAnnotation(GetMapping.class).value()[0]);
+        assertNotNull(method.getAnnotation(RequireOrgPermission.class), method.getName() + " must require organization permission");
+        assertEquals(EffectiveOrgRole.MEMBER, method.getAnnotation(RequireOrgPermission.class).value());
     }
 }

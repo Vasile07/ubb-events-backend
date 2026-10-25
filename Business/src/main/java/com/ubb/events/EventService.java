@@ -1,3 +1,9 @@
 package com.ubb.events;
 
-public interface EventService { }
+import com.ubb.events.dto.EventResponse;
+import java.util.List;
+
+public interface EventService {
+    List<EventResponse> listOrganizationEvents(Long organizationId);
+    EventResponse getOrganizationEvent(Long organizationId, Long eventId);
+}
