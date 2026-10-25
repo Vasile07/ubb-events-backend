@@ -14,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,6 +63,20 @@ class EventTaskRepositoryTest {
                 () -> repository.saveAndFlush(new EventTask(null, null, user, event)));
         assertThrows(DataIntegrityViolationException.class,
                 () -> repository.saveAndFlush(new EventTask(null, "Book the room", user, null)));
+    }
+
+    @Test
+    void findsOnlyTasksOfEventOrderedById() {
+        Event event = saveEvent();
+        Event otherEvent = saveEvent();
+        EventTask first = repository.saveAndFlush(new EventTask(null, "Book the room", null, event));
+        repository.saveAndFlush(new EventTask(null, "Other event task", null, otherEvent));
+        EventTask second = repository.saveAndFlush(new EventTask(null, "Print posters", null, event));
+
+        entityManager.clear();
+        List<EventTask> tasks = repository.findAllByEventIdOrderByIdAsc(event.getId());
+
+        assertEquals(List.of(first.getId(), second.getId()), tasks.stream().map(EventTask::getId).toList());
     }
 
     private Event saveEvent() {
