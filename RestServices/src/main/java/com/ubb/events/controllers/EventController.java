@@ -3,12 +3,16 @@ package com.ubb.events.controllers;
 import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.EventService;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.CreateEventRequest;
 import com.ubb.events.security.RequireOrgPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +26,20 @@ public class EventController {
 
     public EventController(EventService eventService) {
         this.eventService = eventService;
+    }
+
+    @PostMapping("/{organizationId}/events")
+    @RequireOrgPermission(EffectiveOrgRole.MANAGER)
+    @Operation(summary = "Create a draft event with tasks")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Draft event created"),
+            @ApiResponse(responseCode = "400", description = "Event details or task assignments are invalid"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Manager organization access required")
+    })
+    public ResponseEntity<EventResponse> createEvent(@PathVariable Long organizationId,
+            @RequestBody CreateEventRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(eventService.createEvent(organizationId, request));
     }
 
     @GetMapping("/{organizationId}/events")

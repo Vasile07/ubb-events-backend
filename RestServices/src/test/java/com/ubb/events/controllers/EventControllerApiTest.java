@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,7 +50,62 @@ class EventControllerApiTest {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/organizations/7/events/1"))
                 .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/organizations/7/events").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void memberCannotCreateEvent() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(false);
+
+        mockMvc.perform(post("/api/organizations/7/events")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void managerCreatesDraftEventWithTasks() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(eventService.createEvent(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new EventResponse(1L, 7L, 3L, "Hackathon", "Coding night",
+                        DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT));
+
+        mockMvc.perform(post("/api/organizations/7/events")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryId\":3,\"title\":\"Hackathon\",\"description\":\"Coding night\","
+                                + "\"date\":\"2026-11-20\",\"startTime\":\"18:00:00\",\"endTime\":\"22:00:00\","
+                                + "\"location\":\"Room 1\",\"capacity\":50,\"tasks\":[{\"description\":\"Prepare slides\","
+                                + "\"assigneeUserId\":42}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.tasks").doesNotExist());
+        verify(eventService).createEvent(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any());
+        verify(authorizationService).hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER);
+    }
+
+    @Test
+    void invalidCreateRequestReturnsAllValidationErrors() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(eventService.createEvent(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new BusinessRuleException("Event details are invalid", List.of(
+                        new ErrorDetail("title", "Title is required"),
+                        new ErrorDetail("capacity", "Capacity must be greater than zero"))));
+
+        mockMvc.perform(post("/api/organizations/7/events")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.length()").value(2))
+                .andExpect(jsonPath("$.errors[0].field").value("title"))
+                .andExpect(jsonPath("$.errors[1].field").value("capacity"));
     }
 
     @Test

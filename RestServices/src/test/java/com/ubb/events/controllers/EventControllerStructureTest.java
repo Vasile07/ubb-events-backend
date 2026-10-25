@@ -6,6 +6,7 @@ import com.ubb.events.security.RequireOrgPermission;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,6 +42,18 @@ class EventControllerStructureTest {
         assertEquals("/{organizationId}/events/{eventId}/publish", method.getAnnotation(PatchMapping.class).value()[0]);
         assertNotNull(method.getAnnotation(RequireOrgPermission.class), "publishEvent must require organization permission");
         assertEquals(EffectiveOrgRole.MANAGER, method.getAnnotation(RequireOrgPermission.class).value());
+    }
+
+    @Test
+    void createHandlerIsMappedForManagersOnly() throws Exception {
+        Method method = EventController.class.getDeclaredMethod("createEvent", Long.class,
+                com.ubb.events.dto.CreateEventRequest.class);
+        assertNotNull(method.getAnnotation(PostMapping.class));
+        assertEquals("/{organizationId}/events", method.getAnnotation(PostMapping.class).value()[0]);
+        assertNotNull(method.getAnnotation(RequireOrgPermission.class));
+        assertEquals(EffectiveOrgRole.MANAGER, method.getAnnotation(RequireOrgPermission.class).value());
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.Operation.class));
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
     }
 
     private static void assertMemberGet(Method method, String path) {
