@@ -25,6 +25,11 @@ class EventServiceStructureTest {
     }
 
     @Test
+    void serviceDeclaresDiscoverOperation() throws Exception {
+        assertNotNull(EventService.class.getDeclaredMethod("discoverEvents"));
+    }
+
+    @Test
     void publishIsTransactional() throws Exception {
         assertNotNull(EventService.class.getDeclaredMethod("publishEvent", Long.class, Long.class));
         assertTrue(EventServiceImpl.class.getDeclaredMethod("publishEvent", Long.class, Long.class)
