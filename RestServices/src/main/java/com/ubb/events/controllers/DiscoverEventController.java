@@ -3,6 +3,7 @@ package com.ubb.events.controllers;
 import com.ubb.events.EventService;
 import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.EventDetailsResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -15,6 +16,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.security.Principal;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @RestController
 @RequestMapping("/api/events")
@@ -41,5 +45,17 @@ public class DiscoverEventController {
             @Parameter(description = "Latest event date (inclusive), YYYY-MM-DD")
             @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ResponseEntity.ok(eventService.discoverEvents(new EventDiscoveryFilter(search, organizationId, from, to)));
+    }
+
+    @GetMapping("/{eventId}")
+    @Operation(summary = "Inspect an event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Event details"),
+            @ApiResponse(responseCode = "401", description = "Authentication required or token invalid"),
+            @ApiResponse(responseCode = "404", description = "Event not found")
+    })
+    public ResponseEntity<EventDetailsResponse> inspectEvent(@PathVariable Long eventId, Principal principal) {
+        Long userId = ((Number) ((Authentication) principal).getPrincipal()).longValue();
+        return ResponseEntity.ok(eventService.inspectEvent(eventId, userId));
     }
 }

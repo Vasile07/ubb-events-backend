@@ -50,6 +50,17 @@ class RegistrationRepositoryTest {
                 () -> repository.saveAndFlush(new Registration(null, event, null)));
     }
 
+    @Test
+    void countsEventRegistrationsAndFindsUserRegistration() {
+        User user = userRepository.saveAndFlush(new User(null, "Ana", "Student", "registration3@example.com", "password"));
+        Event event = saveEvent();
+        repository.saveAndFlush(new Registration(null, event, user));
+
+        assertEquals(1L, repository.countByEventId(event.getId()));
+        assertTrue(repository.existsByEventIdAndUserId(event.getId(), user.getId()));
+        assertFalse(repository.existsByEventIdAndUserId(event.getId(), 999L));
+    }
+
     private Event saveEvent() {
         Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
         return eventRepository.saveAndFlush(new Event(null, organization, 1L, "Hackathon", "Coding night",
