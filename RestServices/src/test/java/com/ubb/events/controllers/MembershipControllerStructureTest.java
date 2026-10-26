@@ -10,10 +10,18 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import com.ubb.events.security.NoOrgCheck;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class MembershipControllerStructureTest {
+    @Test
+    void requestHandlerIsOpenToNonMembersAndUsesPost() throws Exception {
+        Method method = MembershipController.class.getDeclaredMethod("requestMembership", Long.class, java.security.Principal.class);
+        assertEquals("/{organizationId}/membership-requests", method.getAnnotation(PostMapping.class).value()[0]);
+        assertTrue(method.isAnnotationPresent(NoOrgCheck.class));
+    }
     @Test
     void controllerDefinesOrganizationMembershipRequestHandler() throws Exception {
         assertTrue(MembershipController.class.isAnnotationPresent(RestController.class));

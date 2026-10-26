@@ -12,6 +12,10 @@ import com.ubb.events.dto.OrganizationMemberResponse;
 import com.ubb.events.dto.RolePromotionRequest;
 import com.ubb.events.dto.RolePromotionResponse;
 import com.ubb.events.security.RequireOrgPermission;
+import com.ubb.events.security.NoOrgCheck;
+import java.security.Principal;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +37,22 @@ public class MembershipController {
 
     public MembershipController(MembershipService membershipService) {
         this.membershipService = membershipService;
+    }
+
+    @PostMapping("/{organizationId}/membership-requests")
+    @NoOrgCheck
+    @Operation(summary = "Request organization membership")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Membership request created"),
+            @ApiResponse(responseCode = "400", description = "Membership request is not allowed"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "404", description = "Organization or user not found"),
+            @ApiResponse(responseCode = "409", description = "Pending membership request already exists")
+    })
+    public ResponseEntity<Void> requestMembership(@PathVariable Long organizationId, Principal principal) {
+        Long userId = ((Number) ((org.springframework.security.core.Authentication) principal).getPrincipal()).longValue();
+        membershipService.requestMembership(organizationId, userId);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     @GetMapping("/{organizationId}/membership-requests")

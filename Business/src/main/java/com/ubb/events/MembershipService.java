@@ -9,6 +9,7 @@ import com.ubb.events.dto.RolePromotionResponse;
 import java.util.List;
 
 public interface MembershipService {
+    void requestMembership(Long organizationId, Long userId);
     List<OrganizationMemberResponse> listOrganizationMembers(Long organizationId);
     List<MembershipRequestResponse> listMembershipRequests(Long organizationId, MembershipStatus status);
     MembershipDecisionResponse decideMembershipRequest(Long organizationId, Long requestId, MembershipDecisionRequest request);
