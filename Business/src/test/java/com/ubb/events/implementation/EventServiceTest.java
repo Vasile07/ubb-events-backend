@@ -501,10 +501,10 @@ class EventServiceTest {
 
         EventDetailsResponse response = service.inspectEvent(1L, 42L);
 
-        assertEquals("Event 1", response.title());
-        assertEquals(EventStatus.PUBLISHED, response.status());
-        assertEquals("NOT_REGISTERED", response.registrationStatus());
-        assertTrue(response.registrationAvailable());
+        assertEquals("Event 1", response.getTitle());
+        assertEquals(EventStatus.PUBLISHED, response.getStatus());
+        assertEquals("NOT_REGISTERED", response.getRegistrationStatus());
+        assertTrue(response.isRegistrationAvailable());
     }
 
     @Test
@@ -516,9 +516,9 @@ class EventServiceTest {
 
         EventDetailsResponse response = service.inspectEvent(1L, 42L);
 
-        assertEquals("REGISTERED", response.registrationStatus());
-        assertFalse(response.registrationAvailable());
-        assertEquals(50L, response.registrationCount());
+        assertEquals("REGISTERED", response.getRegistrationStatus());
+        assertFalse(response.isRegistrationAvailable());
+        assertEquals(50L, response.getRegistrationCount());
     }
 
     @Test
@@ -531,9 +531,9 @@ class EventServiceTest {
 
         EventDetailsResponse response = service.inspectEvent(1L, 42L);
 
-        assertEquals(EventStatus.CANCELED, response.status());
-        assertEquals("CANCELLED", response.registrationStatus());
-        assertFalse(response.registrationAvailable());
+        assertEquals(EventStatus.CANCELED, response.getStatus());
+        assertEquals("CANCELLED", response.getRegistrationStatus());
+        assertFalse(response.isRegistrationAvailable());
     }
 
     @Test

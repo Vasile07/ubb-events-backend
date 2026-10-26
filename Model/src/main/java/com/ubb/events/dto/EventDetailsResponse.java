@@ -1,10 +1,28 @@
 package com.ubb.events.dto;
 
 import com.ubb.events.domain.EventStatus;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-public record EventDetailsResponse(Long id, String title, String description,
-        EventOrganizationSummaryResponse organization, LocalDate date, LocalTime startTime,
-        LocalTime endTime, String location, Long capacity, Long registrationCount,
-        boolean registrationAvailable, EventStatus status, String registrationStatus) { }
+@Getter
+@AllArgsConstructor
+@EqualsAndHashCode
+public final class EventDetailsResponse {
+    private final Long id;
+    private final String title;
+    private final String description;
+    private final EventOrganizationSummaryResponse organization;
+    private final LocalDate date;
+    private final LocalTime startTime;
+    private final LocalTime endTime;
+    private final String location;
+    private final Long capacity;
+    private final Long registrationCount;
+    private final boolean registrationAvailable;
+    private final EventStatus status;
+    private final String registrationStatus;
+}
