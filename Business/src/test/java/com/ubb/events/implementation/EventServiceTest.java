@@ -16,6 +16,7 @@ import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
 import com.ubb.events.dto.EventTaskRequest;
 import com.ubb.events.persistence.EventRepository;
@@ -23,6 +24,7 @@ import com.ubb.events.persistence.EventTaskRepository;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.persistence.OrganizationRepository;
 import com.ubb.events.persistence.EventSpecifications;
+import com.ubb.events.persistence.RegistrationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,13 +59,14 @@ class EventServiceTest {
     @Mock EventTaskRepository tasks;
     @Mock MembershipRepository memberships;
     @Mock OrganizationRepository organizations;
+    @Mock RegistrationRepository registrations;
     EventServiceImpl service;
 
     private final Organization organization = new Organization(7L, "Students", null, null);
 
     @BeforeEach
     void setUp() {
-        service = new EventServiceImpl(events, CLOCK, tasks, memberships, organizations);
+        service = new EventServiceImpl(events, CLOCK, tasks, memberships, organizations, registrations);
         lenient().when(organizations.findById(7L)).thenReturn(Optional.of(organization));
     }
 
@@ -487,5 +490,60 @@ class EventServiceTest {
         NotFoundException exception = assertThrows(NotFoundException.class, () -> service.getOrganizationEvent(7L, 1L));
         assertEquals("Event not found", exception.getMessage());
         verify(events).findByIdAndOrganizationId(1L, 7L);
+    }
+
+    @Test
+    void inspectsPublishedEventWithRegistrationDetails() {
+        Event event = published(1L, DATE, START, LocalTime.of(22, 0));
+        when(events.findById(1L)).thenReturn(Optional.of(event));
+        when(registrations.countByEventId(1L)).thenReturn(0L);
+        when(registrations.existsByEventIdAndUserId(1L, 42L)).thenReturn(false);
+
+        EventDetailsResponse response = service.inspectEvent(1L, 42L);
+
+        assertEquals("Event 1", response.getTitle());
+        assertEquals(EventStatus.PUBLISHED, response.getStatus());
+        assertEquals("NOT_REGISTERED", response.getRegistrationStatus());
+        assertTrue(response.isRegistrationAvailable());
+    }
+
+    @Test
+    void mapsRegisteredUserAndCapacityReached() {
+        Event event = published(1L, DATE, START, LocalTime.of(22, 0));
+        when(events.findById(1L)).thenReturn(Optional.of(event));
+        when(registrations.countByEventId(1L)).thenReturn(50L);
+        when(registrations.existsByEventIdAndUserId(1L, 42L)).thenReturn(true);
+
+        EventDetailsResponse response = service.inspectEvent(1L, 42L);
+
+        assertEquals("REGISTERED", response.getRegistrationStatus());
+        assertFalse(response.isRegistrationAvailable());
+        assertEquals(50L, response.getRegistrationCount());
+    }
+
+    @Test
+    void canceledEventKeepsRegistrationAndMapsCanceledStatus() {
+        Event event = published(1L, DATE, START, LocalTime.of(22, 0));
+        event.setStatus(EventStatus.CANCELED);
+        when(events.findById(1L)).thenReturn(Optional.of(event));
+        when(registrations.countByEventId(1L)).thenReturn(1L);
+        when(registrations.existsByEventIdAndUserId(1L, 42L)).thenReturn(true);
+
+        EventDetailsResponse response = service.inspectEvent(1L, 42L);
+
+        assertEquals(EventStatus.CANCELED, response.getStatus());
+        assertEquals("CANCELLED", response.getRegistrationStatus());
+        assertFalse(response.isRegistrationAvailable());
+    }
+
+    @Test
+    void draftAndUnknownEventsAreNotFound() {
+        Event draft = completeDraft();
+        when(events.findById(1L)).thenReturn(Optional.of(draft));
+        assertThrows(NotFoundException.class, () -> service.inspectEvent(1L, 42L));
+
+        when(events.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> service.inspectEvent(99L, 42L));
+        verifyNoInteractions(registrations);
     }
 }

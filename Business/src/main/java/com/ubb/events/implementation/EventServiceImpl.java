@@ -15,6 +15,7 @@ import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
 import com.ubb.events.dto.EventTaskRequest;
 import com.ubb.events.persistence.EventRepository;
@@ -22,6 +23,7 @@ import com.ubb.events.persistence.EventTaskRepository;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.persistence.OrganizationRepository;
 import com.ubb.events.persistence.EventSpecifications;
+import com.ubb.events.persistence.RegistrationRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -31,6 +33,7 @@ import java.util.List;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import com.ubb.events.domain.User;
 
@@ -41,14 +44,23 @@ public class EventServiceImpl implements EventService {
     private final EventTaskRepository tasks;
     private final MembershipRepository memberships;
     private final OrganizationRepository organizations;
+    private final RegistrationRepository registrations;
 
+    @Autowired
     public EventServiceImpl(EventRepository events, Clock clock, EventTaskRepository tasks,
-            MembershipRepository memberships, OrganizationRepository organizations) {
+            MembershipRepository memberships, OrganizationRepository organizations,
+            RegistrationRepository registrations) {
         this.events = events;
         this.clock = clock;
         this.tasks = tasks;
         this.memberships = memberships;
         this.organizations = organizations;
+        this.registrations = registrations;
+    }
+
+    public EventServiceImpl(EventRepository events, Clock clock, EventTaskRepository tasks,
+            MembershipRepository memberships, OrganizationRepository organizations) {
+        this(events, clock, tasks, memberships, organizations, null);
     }
 
     @Override
@@ -197,6 +209,24 @@ public class EventServiceImpl implements EventService {
         upcoming.forEach(event -> result.add(toSummaryResponse(event)));
         completed.forEach(event -> result.add(toSummaryResponse(event)));
         return result;
+    }
+
+    @Override
+    public EventDetailsResponse inspectEvent(Long eventId, Long userId) {
+        Event event = events.findById(eventId)
+                .filter(candidate -> candidate.getStatus() != EventStatus.DRAFT)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        long registrationCount = registrations.countByEventId(eventId);
+        boolean registered = registrations.existsByEventIdAndUserId(eventId, userId);
+        String registrationStatus = registered
+                ? (event.getStatus() == EventStatus.CANCELED ? "CANCELLED" : "REGISTERED")
+                : "NOT_REGISTERED";
+        boolean available = event.getStatus() == EventStatus.PUBLISHED
+                && event.getCapacity() != null && registrationCount < event.getCapacity();
+        return new EventDetailsResponse(event.getId(), event.getTitle(), event.getDescription(),
+                new EventOrganizationSummaryResponse(event.getOrganization().getId(), event.getOrganization().getName()),
+                event.getDate(), event.getStartTime(), event.getEndTime(), event.getLocation(), event.getCapacity(),
+                registrationCount, available, event.getStatus(), registrationStatus);
     }
 
     // An event has ended when its end (or its start, if it has no end time) is not after now.

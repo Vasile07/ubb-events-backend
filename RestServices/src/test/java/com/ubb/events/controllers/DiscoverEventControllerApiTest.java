@@ -3,12 +3,14 @@ package com.ubb.events.controllers;
 import com.ubb.events.EventService;
 import com.ubb.events.OrganizationAuthorizationService;
 import com.ubb.events.common.errors.BusinessRuleException;
+import com.ubb.events.common.errors.NotFoundException;
 import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.EventDetailsResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -150,5 +152,41 @@ class DiscoverEventControllerApiTest {
                         .header("Authorization", "Bearer " + tokenService.issue(42L)))
                 .andExpect(status().isOk());
         verifyNoInteractions(authorizationService);
+    }
+
+    @Test
+    void inspectsEventForAuthenticatedUser() throws Exception {
+        when(eventService.inspectEvent(1L, 42L)).thenReturn(new EventDetailsResponse(
+                1L, "Hackathon", "Coding night", new EventOrganizationSummaryResponse(7L, "Students"),
+                LocalDate.of(2026, 11, 20), LocalTime.of(18, 0), LocalTime.of(22, 0), "Room 1",
+                50L, 1L, true, EventStatus.PUBLISHED, "NOT_REGISTERED"));
+
+        mockMvc.perform(get("/api/events/1")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Hackathon"))
+                .andExpect(jsonPath("$.organization.name").value("Students"))
+                .andExpect(jsonPath("$.registrationStatus").value("NOT_REGISTERED"))
+                .andExpect(jsonPath("$.registrationAvailable").value(true))
+                .andExpect(jsonPath("$.tasks").doesNotExist())
+                .andExpect(jsonPath("$.participants").doesNotExist());
+        verify(eventService).inspectEvent(1L, 42L);
+    }
+
+    @Test
+    void unauthenticatedInspectionIsRejected() throws Exception {
+        mockMvc.perform(get("/api/events/1"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void unknownOrDraftInspectionReturnsNotFound() throws Exception {
+        when(eventService.inspectEvent(99L, 42L)).thenThrow(new NotFoundException("Event not found"));
+
+        mockMvc.perform(get("/api/events/99")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Event not found"));
     }
 }
