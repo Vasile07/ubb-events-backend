@@ -23,9 +23,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,6 +40,71 @@ class MembershipControllerApiTest {
     @Autowired JwtTokenService tokenService;
     @MockitoBean MembershipService membershipService;
     @MockitoBean OrganizationAuthorizationService authorizationService;
+
+    @Test
+    void authenticatedNonMemberCanSubmitEmptyMembershipRequest() throws Exception {
+        mockMvc.perform(post("/api/organizations/7/membership-requests")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isCreated())
+                .andExpect(content().string(""));
+    }
+
+    @Test
+    void unauthenticatedPostRequestIsRejected() throws Exception {
+        mockMvc.perform(post("/api/organizations/7/membership-requests"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Authentication required"));
+    }
+
+    @Test
+    void malformedOrganizationIdIsRejected() throws Exception {
+        mockMvc.perform(post("/api/organizations/not-a-number/membership-requests")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.errors[0].field").value("organizationId"));
+    }
+
+    @Test
+    void duplicatePendingRequestMapsToConflictError() throws Exception {
+        doThrow(new com.ubb.events.common.errors.ConflictException("A membership request is already pending"))
+                .when(membershipService).requestMembership(7L, 42L);
+
+        mockMvc.perform(post("/api/organizations/7/membership-requests")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("A membership request is already pending"))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    void activeMemberMapsToBusinessRuleError() throws Exception {
+        doThrow(new com.ubb.events.common.errors.BusinessRuleException("You are already a member of this organization"))
+                .when(membershipService).requestMembership(7L, 42L);
+
+        mockMvc.perform(post("/api/organizations/7/membership-requests")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("You are already a member of this organization"))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    void unknownOrganizationMapsToNotFoundError() throws Exception {
+        doThrow(new com.ubb.events.common.errors.NotFoundException("Organization not found"))
+                .when(membershipService).requestMembership(7L, 42L);
+
+        mockMvc.perform(post("/api/organizations/7/membership-requests")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Organization not found"))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
 
     @Test
     void unauthenticatedRequestIsRejected() throws Exception {

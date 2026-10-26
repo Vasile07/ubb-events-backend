@@ -15,6 +15,8 @@ import com.ubb.events.dto.MembershipDecisionStatus;
 import com.ubb.events.dto.OrganizationMemberResponse;
 import com.ubb.events.dto.RolePromotionResponse;
 import com.ubb.events.persistence.MembershipRepository;
+import com.ubb.events.persistence.OrganizationRepository;
+import com.ubb.events.persistence.UserRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,9 +24,34 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MembershipServiceImpl implements MembershipService {
     private final MembershipRepository memberships;
+    private final OrganizationRepository organizations;
+    private final UserRepository users;
 
-    public MembershipServiceImpl(MembershipRepository memberships) {
+    public MembershipServiceImpl(MembershipRepository memberships, OrganizationRepository organizations, UserRepository users) {
         this.memberships = memberships;
+        this.organizations = organizations;
+        this.users = users;
+    }
+
+    @Override
+    @Transactional
+    public void requestMembership(Long organizationId, Long userId) {
+        var organization = organizations.findById(organizationId)
+                .orElseThrow(() -> new NotFoundException("Organization not found"));
+        var user = users.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        var existing = memberships.findByUserIdAndOrganizationId(userId, organizationId);
+        if (existing.isPresent()) {
+            Membership membership = existing.get();
+            if (membership.getStatus() == MembershipStatus.ACTIVE) {
+                throw new BusinessRuleException("You are already a member of this organization");
+            }
+            if (membership.getStatus() == MembershipStatus.PENDING) {
+                throw new ConflictException("A membership request is already pending");
+            }
+        }
+        memberships.save(new Membership(null, user, organization,
+                MembershipRole.MEMBER, MembershipStatus.PENDING));
     }
 
     @Override

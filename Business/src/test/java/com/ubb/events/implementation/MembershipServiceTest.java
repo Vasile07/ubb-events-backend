@@ -29,7 +29,64 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MembershipServiceTest {
     @Mock MembershipRepository memberships;
+    @Mock com.ubb.events.persistence.OrganizationRepository organizations;
+    @Mock com.ubb.events.persistence.UserRepository users;
     @InjectMocks MembershipServiceImpl service;
+
+    @Test
+    void createsPendingMemberRequestForAuthenticatedUser() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        when(organizations.findById(7L)).thenReturn(java.util.Optional.of(organization));
+        when(users.findById(42L)).thenReturn(java.util.Optional.of(user));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(java.util.Optional.empty());
+        service.requestMembership(7L, 42L);
+        verify(memberships).save(argThat(m -> m.getUser() == user && m.getOrganization() == organization
+                && m.getRole() == MembershipRole.MEMBER && m.getStatus() == MembershipStatus.PENDING));
+    }
+
+    @Test
+    void rejectsDuplicatePendingRequest() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        when(organizations.findById(7L)).thenReturn(java.util.Optional.of(organization));
+        when(users.findById(42L)).thenReturn(java.util.Optional.of(user));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L))
+                .thenReturn(java.util.Optional.of(new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.PENDING)));
+
+        assertThrows(ConflictException.class, () -> service.requestMembership(7L, 42L));
+        verify(memberships, never()).save(any());
+    }
+
+    @Test
+    void rejectsAlreadyActiveMember() {
+        Organization organization = new Organization(7L, "Students", null, null);
+        User user = new User(42L, "Ana", "Student", "ana@example.com", "password");
+        when(organizations.findById(7L)).thenReturn(java.util.Optional.of(organization));
+        when(users.findById(42L)).thenReturn(java.util.Optional.of(user));
+        when(memberships.findByUserIdAndOrganizationId(42L, 7L))
+                .thenReturn(java.util.Optional.of(new Membership(11L, user, organization, MembershipRole.MEMBER, MembershipStatus.ACTIVE)));
+
+        assertThrows(BusinessRuleException.class, () -> service.requestMembership(7L, 42L));
+        verify(memberships, never()).save(any());
+    }
+
+    @Test
+    void rejectsUnknownOrganization() {
+        when(organizations.findById(7L)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> service.requestMembership(7L, 42L));
+        verifyNoInteractions(users, memberships);
+    }
+
+    @Test
+    void rejectsUnknownUser() {
+        when(organizations.findById(7L)).thenReturn(java.util.Optional.of(new Organization(7L, "Students", null, null)));
+        when(users.findById(42L)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> service.requestMembership(7L, 42L));
+        verifyNoInteractions(memberships);
+    }
 
     @Test
     void defaultsMissingStatusToPendingAndMapsRequests() {

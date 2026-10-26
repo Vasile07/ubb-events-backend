@@ -75,6 +75,15 @@ class MembershipRepositoryTest {
     }
 
     @Test
+    void findsMembershipForUserAndOrganizationToCheckExistingRequest() {
+        User user = userRepository.saveAndFlush(new User(null, "Ana", "Student", "ana-request@example.com", "password"));
+        Organization organization = organizationRepository.saveAndFlush(new Organization(null, "Request org", null, null));
+        Membership pending = repository.saveAndFlush(new Membership(null, user, organization, MembershipRole.MEMBER, MembershipStatus.PENDING));
+
+        assertEquals(pending.getId(), repository.findByUserIdAndOrganizationId(user.getId(), organization.getId()).orElseThrow().getId());
+    }
+
+    @Test
     void activeOrganizationQueryExcludesPendingAndOtherOrganizations() {
         User ana = userRepository.saveAndFlush(new User(null, "Ana", "Member", "ana-active@example.com", "password"));
         User bob = userRepository.saveAndFlush(new User(null, "Bob", "Pending", "bob-pending@example.com", "password"));
