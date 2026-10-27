@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository;
 public interface RegistrationRepository extends JpaRepository<Registration, Long> {
     long countByEventId(Long eventId);
     boolean existsByEventIdAndUserId(Long eventId, Long userId);
+    java.util.Optional<Registration> findByEventIdAndUserId(Long eventId, Long userId);
 }

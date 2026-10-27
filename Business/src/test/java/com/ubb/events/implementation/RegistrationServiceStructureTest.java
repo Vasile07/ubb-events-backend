@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RegistrationServiceStructureTest {
     @Test
-    void implementationIsAnnotatedAndHasNoOperations() {
+    void implementationIsAnnotatedAndExposesRegistrationOperation() throws NoSuchMethodException {
         assertTrue(RegistrationServiceImpl.class.isAnnotationPresent(Service.class));
         assertTrue(RegistrationService.class.isAssignableFrom(RegistrationServiceImpl.class));
-        assertEquals(0, RegistrationService.class.getDeclaredMethods().length);
-        assertEquals(0, RegistrationServiceImpl.class.getDeclaredMethods().length);
+        assertNotNull(RegistrationService.class.getDeclaredMethod("registerForEvent", Long.class, Long.class));
+        assertNotNull(RegistrationServiceImpl.class.getDeclaredConstructor(com.ubb.events.persistence.EventRepository.class, com.ubb.events.persistence.RegistrationRepository.class, com.ubb.events.persistence.UserRepository.class));
     }
 }
