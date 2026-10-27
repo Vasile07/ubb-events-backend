@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "registrations", schema = "public")
+@Table(name = "registrations", schema = "public", uniqueConstraints = @jakarta.persistence.UniqueConstraint(columnNames = {"event_id", "user_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

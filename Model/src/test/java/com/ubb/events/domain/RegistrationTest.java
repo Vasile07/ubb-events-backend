@@ -20,7 +20,8 @@ class RegistrationTest {
         Table table = Registration.class.getAnnotation(Table.class);
         assertEquals("registrations", table.name());
         assertEquals("public", table.schema());
-        assertEquals(0, table.uniqueConstraints().length);
+        assertEquals(1, table.uniqueConstraints().length);
+        assertArrayEquals(new String[] {"event_id", "user_id"}, table.uniqueConstraints()[0].columnNames());
 
         Field id = Registration.class.getDeclaredField("id");
         assertTrue(id.isAnnotationPresent(Id.class));
