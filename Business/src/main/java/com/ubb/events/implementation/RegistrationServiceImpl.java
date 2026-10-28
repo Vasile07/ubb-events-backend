@@ -41,4 +41,17 @@ public class RegistrationServiceImpl implements RegistrationService {
         Registration saved = registrationRepository.save(registration);
         return new RegistrationResponse(saved.getId(), eventId, userId);
     }
+
+    @Override @Transactional
+    public void cancelRegistration(Long eventId, Long userId) {
+        Event event = eventRepository.findWithLockById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        LocalDateTime start = LocalDateTime.of(event.getDate(), event.getStartTime());
+        if (!start.isAfter(LocalDateTime.now())) {
+            throw new ConflictException("Registration cannot be canceled because the event has started");
+        }
+        Registration registration = registrationRepository.findByEventIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new NotFoundException("Active registration not found"));
+        registrationRepository.delete(registration);
+    }
 }
