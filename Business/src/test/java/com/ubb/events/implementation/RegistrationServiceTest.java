@@ -27,7 +27,32 @@ class RegistrationServiceTest {
         assertEquals(5L, service.registerForEvent(1L,9L).getId());
     }
     @Test void rejectsUnknownEvent() { when(events.findWithLockById(1L)).thenReturn(Optional.empty()); assertThrows(NotFoundException.class, () -> service.registerForEvent(1L,9L)); }
+    @Test void rejectsCancellationForUnknownEvent() { when(events.findWithLockById(1L)).thenReturn(Optional.empty()); assertThrows(NotFoundException.class, () -> service.cancelRegistration(1L, 9L)); }
     @Test void rejectsDuplicate() { Event e=event(EventStatus.PUBLISHED,LocalDate.now().plusDays(1),LocalTime.NOON,LocalTime.of(13,0),2); when(events.findWithLockById(1L)).thenReturn(Optional.of(e)); when(registrations.findByEventIdAndUserId(1L,9L)).thenReturn(Optional.of(new Registration())); assertThrows(ConflictException.class,()->service.registerForEvent(1L,9L)); }
     @Test void rejectsFullEvent() { Event e=event(EventStatus.PUBLISHED,LocalDate.now().plusDays(1),LocalTime.NOON,LocalTime.of(13,0),1); when(events.findWithLockById(1L)).thenReturn(Optional.of(e)); when(registrations.findByEventIdAndUserId(1L,9L)).thenReturn(Optional.empty()); when(registrations.countByEventId(1L)).thenReturn(1L); assertThrows(ConflictException.class,()->service.registerForEvent(1L,9L)); }
     @Test void rejectsCanceledOrDraft() { for(EventStatus s:new EventStatus[]{EventStatus.DRAFT,EventStatus.CANCELED}) { Event e=event(s,LocalDate.now().plusDays(1),LocalTime.NOON,LocalTime.of(13,0),1); when(events.findWithLockById(1L)).thenReturn(Optional.of(e)); assertThrows(ConflictException.class,()->service.registerForEvent(1L,9L)); } }
+
+    @Test void cancelsOwnActiveRegistration() {
+        Event e = event(EventStatus.PUBLISHED, LocalDate.now().plusDays(1), LocalTime.NOON, LocalTime.of(13, 0), 2);
+        Registration registration = new Registration();
+        when(events.findWithLockById(1L)).thenReturn(Optional.of(e));
+        when(registrations.findByEventIdAndUserId(1L, 9L)).thenReturn(Optional.of(registration));
+        service.cancelRegistration(1L, 9L);
+        verify(registrations).delete(registration);
+    }
+
+    @Test void rejectsCancellationWhenNoActiveRegistration() {
+        Event e = event(EventStatus.PUBLISHED, LocalDate.now().plusDays(1), LocalTime.NOON, LocalTime.of(13, 0), 2);
+        when(events.findWithLockById(1L)).thenReturn(Optional.of(e));
+        when(registrations.findByEventIdAndUserId(1L, 9L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> service.cancelRegistration(1L, 9L));
+        verify(registrations, never()).delete(any());
+    }
+
+    @Test void rejectsCancellationAfterEventStart() {
+        Event e = event(EventStatus.PUBLISHED, LocalDate.now().minusDays(1), LocalTime.NOON, LocalTime.of(13, 0), 2);
+        when(events.findWithLockById(1L)).thenReturn(Optional.of(e));
+        assertThrows(ConflictException.class, () -> service.cancelRegistration(1L, 9L));
+        verify(registrations, never()).delete(any());
+    }
 }
