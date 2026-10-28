@@ -2,6 +2,9 @@ package com.ubb.events.implementation;
 
 import com.ubb.events.RegistrationService;
 import com.ubb.events.dto.RegistrationResponse;
+import com.ubb.events.dto.RegistrationDetailsResponse;
+import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.persistence.EventRepository;
 import com.ubb.events.persistence.RegistrationRepository;
 import com.ubb.events.persistence.UserRepository;
@@ -16,6 +19,7 @@ import com.ubb.events.domain.User;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Service
 public class RegistrationServiceImpl implements RegistrationService {
@@ -53,5 +57,18 @@ public class RegistrationServiceImpl implements RegistrationService {
         Registration registration = registrationRepository.findByEventIdAndUserId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Active registration not found"));
         registrationRepository.delete(registration);
+    }
+
+    @Override
+    public List<RegistrationDetailsResponse> listMyRegistrations(Long userId) {
+        return registrationRepository.findAllByUserId(userId).stream()
+                .map(registration -> new RegistrationDetailsResponse(registration.getId(), toEventSummary(registration.getEvent())))
+                .toList();
+    }
+
+    private static EventSummaryResponse toEventSummary(Event event) {
+        return new EventSummaryResponse(event.getId(), event.getTitle(), event.getDate(), event.getStartTime(),
+                event.getEndTime(), event.getLocation(), event.getStatus(),
+                new EventOrganizationSummaryResponse(event.getOrganization().getId(), event.getOrganization().getName()));
     }
 }
