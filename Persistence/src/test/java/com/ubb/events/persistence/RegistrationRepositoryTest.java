@@ -82,4 +82,26 @@ class RegistrationRepositoryTest {
         return eventRepository.saveAndFlush(new Event(null, organization, 1L, "Hackathon", "Coding night",
                 LocalDate.of(2026, 11, 20), LocalTime.of(18, 0), null, null, null, EventStatus.DRAFT));
     }
+
+    @Test
+    void findsOnlyRequestedUserAndOrdersByEventDate() {
+        Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
+        User requested = userRepository.saveAndFlush(new User(null, "Requested", "User", "requested@example.com", "hash"));
+        User other = userRepository.saveAndFlush(new User(null, "Other", "User", "other@example.com", "hash"));
+        Event later = eventRepository.saveAndFlush(new Event(null, organization, 1L, "Later", "Description",
+                LocalDate.of(2026, 12, 2), LocalTime.NOON, LocalTime.of(13, 0), "Room", 20L, EventStatus.PUBLISHED));
+        Event earlier = eventRepository.saveAndFlush(new Event(null, organization, 1L, "Earlier", "Description",
+                LocalDate.of(2026, 12, 1), LocalTime.NOON, LocalTime.of(13, 0), "Room", 20L, EventStatus.PUBLISHED));
+        repository.saveAndFlush(new Registration(null, later, requested));
+        repository.saveAndFlush(new Registration(null, earlier, requested));
+        repository.saveAndFlush(new Registration(null, earlier, other));
+
+        var result = repository.findAllByUserId(requested.getId());
+
+        assertEquals(2, result.size());
+        assertEquals("Earlier", result.get(0).getEvent().getTitle());
+        assertEquals("Later", result.get(1).getEvent().getTitle());
+        assertEquals(requested.getId(), result.get(0).getUser().getId());
+        assertEquals(requested.getId(), result.get(1).getUser().getId());
+    }
 }

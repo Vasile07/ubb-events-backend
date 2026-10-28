@@ -9,6 +9,7 @@ import java.time.*;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import java.util.List;
 
 class RegistrationServiceTest {
     private final EventRepository events = mock(EventRepository.class);
@@ -54,5 +55,19 @@ class RegistrationServiceTest {
         when(events.findWithLockById(1L)).thenReturn(Optional.of(e));
         assertThrows(ConflictException.class, () -> service.cancelRegistration(1L, 9L));
         verify(registrations, never()).delete(any());
+    }
+
+    @Test void listsOnlyTheAuthenticatedUsersRegistrationsWithPublicEventDetails() {
+        Event e = event(EventStatus.PUBLISHED, LocalDate.now().plusDays(1), LocalTime.NOON, LocalTime.of(13, 0), 2);
+        e.setTitle("Public event"); e.setDescription("Details"); e.setLocation("Room 1");
+        Organization organization = new Organization(); organization.setId(3L); organization.setName("UBB Org"); e.setOrganization(organization);
+        Registration registration = new Registration(); registration.setId(5L); registration.setEvent(e);
+        User user = new User(); user.setId(9L); registration.setUser(user);
+        when(registrations.findAllByUserId(9L)).thenReturn(List.of(registration));
+        var result = service.listMyRegistrations(9L);
+        assertEquals(1, result.size());
+        assertEquals(5L, result.get(0).getRegistrationId());
+        assertEquals("Public event", result.get(0).getEvent().getTitle());
+        verify(registrations).findAllByUserId(9L);
     }
 }

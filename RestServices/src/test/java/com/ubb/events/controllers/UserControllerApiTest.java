@@ -5,8 +5,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import com.ubb.events.common.security.JwtTokenService;
+import com.ubb.events.RegistrationService;
+import com.ubb.events.dto.EventSummaryResponse;
+import com.ubb.events.dto.RegistrationDetailsResponse;
+import com.ubb.events.domain.EventStatus;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+import static org.mockito.Mockito.when;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,11 +29,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UserControllerApiTest {
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenService tokenService;
+    @MockitoBean RegistrationService registrationService;
 
     @Test
     void profileRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/users/me"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void registrationsRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/users/me/registrations"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void registrationsReturnsOnlyPublicDetailsForAuthenticatedPrincipal() throws Exception {
+        EventSummaryResponse event = new EventSummaryResponse(7L, "Public event", LocalDate.of(2026, 12, 1),
+                LocalTime.of(10, 0), LocalTime.of(12, 0), "Room 1", EventStatus.PUBLISHED, null);
+        when(registrationService.listMyRegistrations(42L))
+                .thenReturn(List.of(new RegistrationDetailsResponse(9L, event)));
+
+        mockMvc.perform(get("/api/users/me/registrations")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].registrationId").value(9))
+                .andExpect(jsonPath("$[0].event.title").value("Public event"))
+                .andExpect(jsonPath("$[0].user").doesNotExist())
+                .andExpect(jsonPath("$[0].event.registrationCount").doesNotExist());
     }
 
     @Test
