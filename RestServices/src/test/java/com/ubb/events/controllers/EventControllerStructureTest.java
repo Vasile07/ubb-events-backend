@@ -56,6 +56,17 @@ class EventControllerStructureTest {
         assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
     }
 
+    @Test
+    void registrationsHandlerIsMappedForOrganizationMembers() throws Exception {
+        Method method = EventController.class.getDeclaredMethod("listEventRegistrations", Long.class, Long.class);
+        assertNotNull(method.getAnnotation(GetMapping.class));
+        assertEquals("/{organizationId}/events/{eventId}/registrations", method.getAnnotation(GetMapping.class).value()[0]);
+        assertNotNull(method.getAnnotation(RequireOrgPermission.class));
+        assertEquals(EffectiveOrgRole.MEMBER, method.getAnnotation(RequireOrgPermission.class).value());
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.Operation.class));
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
+    }
+
     private static void assertMemberGet(Method method, String path) {
         assertNotNull(method.getAnnotation(GetMapping.class), method.getName() + " must be a GET handler");
         assertEquals(path, method.getAnnotation(GetMapping.class).value()[0]);

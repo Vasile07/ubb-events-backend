@@ -104,4 +104,33 @@ class RegistrationRepositoryTest {
         assertEquals(requested.getId(), result.get(0).getUser().getId());
         assertEquals(requested.getId(), result.get(1).getUser().getId());
     }
+
+    @Test
+    void findsRegistrationsOnlyForRequestedEventAndOrganizationWithJoinedUsers() {
+        Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB Registration Org", null, null));
+        Organization otherOrganization = organizationRepository.saveAndFlush(new Organization(null, "Other Registration Org", null, null));
+        User first = userRepository.saveAndFlush(new User(null, "Ada", "Lovelace", "registration-filter-1@example.com", "hash"));
+        User second = userRepository.saveAndFlush(new User(null, "Grace", "Hopper", "registration-filter-2@example.com", "hash"));
+        Event requestedEvent = eventRepository.saveAndFlush(new Event(null, organization, 1L, "Requested", "Description",
+                LocalDate.of(2026, 12, 3), LocalTime.NOON, LocalTime.of(13, 0), "Room", 20L, EventStatus.PUBLISHED));
+        Event otherEvent = eventRepository.saveAndFlush(new Event(null, otherOrganization, 1L, "Other", "Description",
+                LocalDate.of(2026, 12, 4), LocalTime.NOON, LocalTime.of(13, 0), "Room", 20L, EventStatus.PUBLISHED));
+        repository.saveAndFlush(new Registration(null, requestedEvent, first));
+        repository.saveAndFlush(new Registration(null, requestedEvent, second));
+        repository.saveAndFlush(new Registration(null, otherEvent, first));
+
+        var result = repository.findAllByEventIdAndOrganizationId(requestedEvent.getId(), organization.getId());
+
+        assertEquals(2, result.size());
+        assertEquals("Hopper", result.get(0).getUser().getLastName());
+        assertEquals("Grace", result.get(0).getUser().getFirstName());
+        assertEquals("registration-filter-2@example.com", result.get(0).getUser().getEmail());
+        assertEquals("Lovelace", result.get(1).getUser().getLastName());
+    }
+
+    @Test
+    void returnsEmptyListWhenEventHasNoRegistrations() {
+        Event event = saveEvent();
+        assertTrue(repository.findAllByEventIdAndOrganizationId(event.getId(), event.getOrganization().getId()).isEmpty());
+    }
 }
