@@ -14,4 +14,6 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
     java.util.Optional<Registration> findByEventIdAndUserId(Long eventId, Long userId);
     @Query("select r from Registration r join fetch r.event e where r.user.id = :userId order by e.date asc, e.startTime asc, r.id asc")
     List<Registration> findAllByUserId(@Param("userId") Long userId);
+    @Query("select r from Registration r join fetch r.user u where r.event.id = :eventId and r.event.organization.id = :organizationId order by u.lastName asc, u.firstName asc, u.id asc")
+    List<Registration> findAllByEventIdAndOrganizationId(@Param("eventId") Long eventId, @Param("organizationId") Long organizationId);
 }

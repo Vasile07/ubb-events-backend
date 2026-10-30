@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import com.ubb.events.dto.EventRegistrationResponse;
 
 @Service
 public class RegistrationServiceImpl implements RegistrationService {
@@ -63,6 +64,18 @@ public class RegistrationServiceImpl implements RegistrationService {
     public List<RegistrationDetailsResponse> listMyRegistrations(Long userId) {
         return registrationRepository.findAllByUserId(userId).stream()
                 .map(registration -> new RegistrationDetailsResponse(registration.getId(), toEventSummary(registration.getEvent())))
+                .toList();
+    }
+
+    @Override
+    public List<EventRegistrationResponse> listEventRegistrations(Long organizationId, Long eventId) {
+        eventRepository.findByIdAndOrganizationId(eventId, organizationId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        return registrationRepository.findAllByEventIdAndOrganizationId(eventId, organizationId).stream()
+                .map(registration -> new EventRegistrationResponse(
+                        registration.getUser().getFirstName(),
+                        registration.getUser().getLastName(),
+                        registration.getUser().getEmail()))
                 .toList();
     }
 

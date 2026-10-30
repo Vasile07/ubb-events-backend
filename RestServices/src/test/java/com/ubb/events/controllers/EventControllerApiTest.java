@@ -2,6 +2,7 @@ package com.ubb.events.controllers;
 
 import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.EventService;
+import com.ubb.events.RegistrationService;
 import com.ubb.events.OrganizationAuthorizationService;
 import com.ubb.events.common.errors.BusinessRuleException;
 import com.ubb.events.common.errors.ConflictException;
@@ -10,6 +11,7 @@ import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.domain.EventStatus;
 import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.EventRegistrationResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -42,6 +44,7 @@ class EventControllerApiTest {
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenService tokenService;
     @MockitoBean EventService eventService;
+    @MockitoBean RegistrationService registrationService;
     @MockitoBean OrganizationAuthorizationService authorizationService;
 
     @Test
@@ -198,6 +201,67 @@ class EventControllerApiTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("Event not found"));
+    }
+
+    @Test
+    void memberViewsEventRegistrationsWithPrivacyLimitedFields() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(registrationService.listEventRegistrations(7L, 1L)).thenReturn(List.of(
+                new EventRegistrationResponse("Ada", "Lovelace", "ada@example.com")));
+
+        mockMvc.perform(get("/api/organizations/7/events/1/registrations")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].firstName").value("Ada"))
+                .andExpect(jsonPath("$[0].lastName").value("Lovelace"))
+                .andExpect(jsonPath("$[0].email").value("ada@example.com"))
+                .andExpect(jsonPath("$[0].password").doesNotExist());
+        verify(registrationService).listEventRegistrations(7L, 1L);
+    }
+
+    @Test
+    void nonMemberCannotViewEventRegistrations() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(false);
+        mockMvc.perform(get("/api/organizations/7/events/1/registrations")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+        verifyNoInteractions(registrationService);
+    }
+
+    @Test
+    void managerCanViewEventRegistrations() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(registrationService.listEventRegistrations(7L, 1L)).thenReturn(List.of());
+        mockMvc.perform(get("/api/organizations/7/events/1/registrations")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        verify(registrationService).listEventRegistrations(7L, 1L);
+    }
+
+    @Test
+    void emptyRegistrationListIsReturnedAsEmptyJsonArray() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(registrationService.listEventRegistrations(7L, 1L)).thenReturn(List.of());
+        mockMvc.perform(get("/api/organizations/7/events/1/registrations")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void eventFromAnotherOrganizationReturnsSharedNotFoundResponse() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(registrationService.listEventRegistrations(7L, 99L))
+                .thenThrow(new NotFoundException("Event not found"));
+        mockMvc.perform(get("/api/organizations/7/events/99/registrations")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Event not found"))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     private static final String PUBLISH_URL = "/api/organizations/7/events/1/publish";

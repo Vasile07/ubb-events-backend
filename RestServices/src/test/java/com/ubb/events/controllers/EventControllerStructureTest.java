@@ -20,7 +20,7 @@ class EventControllerStructureTest {
         assertTrue(EventController.class.isAnnotationPresent(RestController.class));
         assertNotNull(EventController.class.getAnnotation(RequestMapping.class));
         assertEquals("/api/organizations", EventController.class.getAnnotation(RequestMapping.class).value()[0]);
-        assertNotNull(EventController.class.getDeclaredConstructor(EventService.class));
+        assertNotNull(EventController.class.getDeclaredConstructor(EventService.class, com.ubb.events.RegistrationService.class));
     }
 
     @Test
@@ -52,6 +52,17 @@ class EventControllerStructureTest {
         assertEquals("/{organizationId}/events", method.getAnnotation(PostMapping.class).value()[0]);
         assertNotNull(method.getAnnotation(RequireOrgPermission.class));
         assertEquals(EffectiveOrgRole.MANAGER, method.getAnnotation(RequireOrgPermission.class).value());
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.Operation.class));
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
+    }
+
+    @Test
+    void registrationsHandlerIsMappedForOrganizationMembers() throws Exception {
+        Method method = EventController.class.getDeclaredMethod("listEventRegistrations", Long.class, Long.class);
+        assertNotNull(method.getAnnotation(GetMapping.class));
+        assertEquals("/{organizationId}/events/{eventId}/registrations", method.getAnnotation(GetMapping.class).value()[0]);
+        assertNotNull(method.getAnnotation(RequireOrgPermission.class));
+        assertEquals(EffectiveOrgRole.MEMBER, method.getAnnotation(RequireOrgPermission.class).value());
         assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.Operation.class));
         assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
     }

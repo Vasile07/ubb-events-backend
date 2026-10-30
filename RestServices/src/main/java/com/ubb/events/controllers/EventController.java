@@ -3,6 +3,8 @@ package com.ubb.events.controllers;
 import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.EventService;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.EventRegistrationResponse;
+import com.ubb.events.RegistrationService;
 import com.ubb.events.dto.CreateEventRequest;
 import com.ubb.events.security.RequireOrgPermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,14 +20,18 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @RestController
 @RequestMapping("/api/organizations")
 public class EventController {
     private final EventService eventService;
+    private final RegistrationService registrationService;
 
-    public EventController(EventService eventService) {
+    @Autowired
+    public EventController(EventService eventService, RegistrationService registrationService) {
         this.eventService = eventService;
+        this.registrationService = registrationService;
     }
 
     @PostMapping("/{organizationId}/events")
@@ -82,5 +88,19 @@ public class EventController {
     })
     public ResponseEntity<EventResponse> publishEvent(@PathVariable Long organizationId, @PathVariable Long eventId) {
         return ResponseEntity.ok(eventService.publishEvent(organizationId, eventId));
+    }
+
+    @GetMapping("/{organizationId}/events/{eventId}/registrations")
+    @RequireOrgPermission
+    @Operation(summary = "View registrations for an organization event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Registered users returned"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Organization membership required"),
+            @ApiResponse(responseCode = "404", description = "Event not found in organization")
+    })
+    public ResponseEntity<List<EventRegistrationResponse>> listEventRegistrations(
+            @PathVariable Long organizationId, @PathVariable Long eventId) {
+        return ResponseEntity.ok(registrationService.listEventRegistrations(organizationId, eventId));
     }
 }

@@ -10,6 +10,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.List;
+import com.ubb.events.dto.EventRegistrationResponse;
 
 class RegistrationServiceTest {
     private final EventRepository events = mock(EventRepository.class);
@@ -69,5 +70,29 @@ class RegistrationServiceTest {
         assertEquals(5L, result.get(0).getRegistrationId());
         assertEquals("Public event", result.get(0).getEvent().getTitle());
         verify(registrations).findAllByUserId(9L);
+    }
+
+    @Test void listsRegistrantNameAndEmailForOwnedEvent() {
+        Event e = event(EventStatus.PUBLISHED, LocalDate.now().plusDays(1), LocalTime.NOON, LocalTime.of(13, 0), 2);
+        Organization organization = new Organization(); organization.setId(3L); e.setOrganization(organization);
+        User user = new User(); user.setFirstName("Ada"); user.setLastName("Lovelace"); user.setEmail("ada@example.com");
+        Registration registration = new Registration(); registration.setEvent(e); registration.setUser(user);
+        when(events.findByIdAndOrganizationId(1L, 3L)).thenReturn(Optional.of(e));
+        when(registrations.findAllByEventIdAndOrganizationId(1L, 3L)).thenReturn(List.of(registration));
+        List<EventRegistrationResponse> result = service.listEventRegistrations(3L, 1L);
+        assertEquals(List.of(new EventRegistrationResponse("Ada", "Lovelace", "ada@example.com")), result);
+    }
+
+    @Test void returnsEmptyListWhenEventHasNoRegistrations() {
+        Event e = event(EventStatus.PUBLISHED, LocalDate.now().plusDays(1), LocalTime.NOON, LocalTime.of(13, 0), 2);
+        when(events.findByIdAndOrganizationId(1L, 3L)).thenReturn(Optional.of(e));
+        when(registrations.findAllByEventIdAndOrganizationId(1L, 3L)).thenReturn(List.of());
+        assertTrue(service.listEventRegistrations(3L, 1L).isEmpty());
+    }
+
+    @Test void rejectsEventFromAnotherOrganization() {
+        when(events.findByIdAndOrganizationId(1L, 3L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> service.listEventRegistrations(3L, 1L));
+        verifyNoInteractions(registrations);
     }
 }
