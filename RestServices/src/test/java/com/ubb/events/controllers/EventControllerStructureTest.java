@@ -20,7 +20,7 @@ class EventControllerStructureTest {
         assertTrue(EventController.class.isAnnotationPresent(RestController.class));
         assertNotNull(EventController.class.getAnnotation(RequestMapping.class));
         assertEquals("/api/organizations", EventController.class.getAnnotation(RequestMapping.class).value()[0]);
-        assertNotNull(EventController.class.getDeclaredConstructor(EventService.class));
+        assertNotNull(EventController.class.getDeclaredConstructor(EventService.class, com.ubb.events.RegistrationService.class));
     }
 
     @Test

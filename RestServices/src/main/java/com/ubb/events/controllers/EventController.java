@@ -28,10 +28,6 @@ public class EventController {
     private final EventService eventService;
     private final RegistrationService registrationService;
 
-    public EventController(EventService eventService) {
-        this(eventService, null);
-    }
-
     @Autowired
     public EventController(EventService eventService, RegistrationService registrationService) {
         this.eventService = eventService;
