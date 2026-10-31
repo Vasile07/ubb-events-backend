@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -52,6 +53,8 @@ class EventControllerApiTest {
         mockMvc.perform(get("/api/organizations/7/events"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/organizations/7/events/1"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/api/organizations/7/events/1"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/organizations/7/events").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized());
@@ -265,6 +268,50 @@ class EventControllerApiTest {
     }
 
     private static final String PUBLISH_URL = "/api/organizations/7/events/1/publish";
+
+    @Test
+    void managerCanDeleteEventAndReceivesNoContent() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+
+        mockMvc.perform(delete("/api/organizations/7/events/1")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L)))
+                .andExpect(status().isNoContent());
+        verify(eventService).deleteEvent(7L, 1L);
+    }
+
+    @Test
+    void memberCannotDeleteEvent() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(false);
+
+        mockMvc.perform(delete("/api/organizations/7/events/1")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void missingEventDeleteReturnsNotFound() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new NotFoundException("Event not found"))
+                .when(eventService).deleteEvent(7L, 99L);
+
+        mockMvc.perform(delete("/api/organizations/7/events/99")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Event not found"));
+    }
+
+    @Test
+    void endedEventDeleteReturnsConflictWithReason() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new ConflictException("Event has already ended and cannot be deleted"))
+                .when(eventService).deleteEvent(7L, 1L);
+
+        mockMvc.perform(delete("/api/organizations/7/events/1")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Event has already ended and cannot be deleted"));
+    }
 
     @Test
     void unauthenticatedPublishIsRejected() throws Exception {

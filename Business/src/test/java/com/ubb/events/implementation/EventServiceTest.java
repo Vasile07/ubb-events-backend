@@ -493,6 +493,85 @@ class EventServiceTest {
     }
 
     @Test
+    void deleteSetsFuturePublishedEventCanceledAndSavesIt() {
+        Event published = completeDraft();
+        published.setStatus(EventStatus.PUBLISHED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(published));
+        when(events.save(published)).thenReturn(published);
+
+        service.deleteEvent(7L, 1L);
+
+        assertEquals(EventStatus.CANCELED, published.getStatus());
+        verify(events).save(published);
+    }
+
+    @Test
+    void deleteRefusesEventThatHasEndedWithReason() {
+        Event ended = completeDraft();
+        ended.setDate(TODAY.minusDays(1));
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(ended));
+
+        ConflictException exception = assertThrows(ConflictException.class, () -> service.deleteEvent(7L, 1L));
+
+        assertTrue(exception.getMessage().toLowerCase().contains("ended"));
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void deletingDraftSetsCanceledStatusInOrganizationView() {
+        Event draft = completeDraft();
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
+        when(events.save(draft)).thenReturn(draft);
+
+        service.deleteEvent(7L, 1L);
+
+        assertEquals(EventStatus.CANCELED, draft.getStatus());
+        assertEquals(EventStatus.CANCELED, service.getOrganizationEvent(7L, 1L).getStatus());
+    }
+
+    @Test
+    void deletingPublishedEventMapsToCanceledAndCannotBePublishedAgain() {
+        Event published = completeDraft();
+        published.setStatus(EventStatus.PUBLISHED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(published));
+        when(events.save(published)).thenReturn(published);
+        service.deleteEvent(7L, 1L);
+
+        assertEquals(EventStatus.CANCELED, published.getStatus());
+        assertEquals(EventStatus.CANCELED, service.getOrganizationEvent(7L, 1L).getStatus());
+        ConflictException exception = assertThrows(ConflictException.class, () -> service.publishEvent(7L, 1L));
+        assertTrue(exception.getMessage().contains("canceled"));
+        verify(events, times(1)).save(published);
+    }
+
+    @Test
+    void canceledPublishedEventIsReturnedAsCanceledOnPublicInspection() {
+        Event published = completeDraft();
+        published.setStatus(EventStatus.CANCELED);
+        when(events.findById(1L)).thenReturn(Optional.of(published));
+        when(registrations.countByEventId(1L)).thenReturn(1L);
+        when(registrations.existsByEventIdAndUserId(1L, 42L)).thenReturn(true);
+
+        EventDetailsResponse response = service.inspectEvent(1L, 42L);
+
+        assertEquals(EventStatus.CANCELED, response.getStatus());
+        assertEquals("CANCELLED", response.getRegistrationStatus());
+        assertFalse(response.isRegistrationAvailable());
+    }
+
+    @Test
+    void deletingMissingOrAlreadyCanceledEventIsRejected() {
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> service.deleteEvent(7L, 1L));
+
+        Event canceled = completeDraft();
+        canceled.setStatus(EventStatus.CANCELED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(canceled));
+        assertThrows(ConflictException.class, () -> service.deleteEvent(7L, 1L));
+        verify(events, never()).save(any());
+    }
+
+    @Test
     void inspectsPublishedEventWithRegistrationDetails() {
         Event event = published(1L, DATE, START, LocalTime.of(22, 0));
         when(events.findById(1L)).thenReturn(Optional.of(event));

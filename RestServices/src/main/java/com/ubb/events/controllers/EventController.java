@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -88,6 +89,21 @@ public class EventController {
     })
     public ResponseEntity<EventResponse> publishEvent(@PathVariable Long organizationId, @PathVariable Long eventId) {
         return ResponseEntity.ok(eventService.publishEvent(organizationId, eventId));
+    }
+
+    @DeleteMapping("/{organizationId}/events/{eventId}")
+    @RequireOrgPermission(EffectiveOrgRole.MANAGER)
+    @Operation(summary = "Delete an event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Event deleted"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Manager organization access required"),
+            @ApiResponse(responseCode = "404", description = "Event not found"),
+            @ApiResponse(responseCode = "409", description = "Event has already ended or is already canceled")
+    })
+    public ResponseEntity<Void> deleteEvent(@PathVariable Long organizationId, @PathVariable Long eventId) {
+        eventService.deleteEvent(organizationId, eventId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{organizationId}/events/{eventId}/registrations")
