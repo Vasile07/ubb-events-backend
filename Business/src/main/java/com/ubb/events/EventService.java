@@ -12,6 +12,7 @@ public interface EventService {
     List<EventResponse> listOrganizationEvents(Long organizationId);
     EventResponse getOrganizationEvent(Long organizationId, Long eventId);
     EventResponse publishEvent(Long organizationId, Long eventId);
+    void deleteEvent(Long organizationId, Long eventId);
     List<EventSummaryResponse> discoverEvents(EventDiscoveryFilter filter);
     EventDetailsResponse inspectEvent(Long eventId, Long userId);
 }

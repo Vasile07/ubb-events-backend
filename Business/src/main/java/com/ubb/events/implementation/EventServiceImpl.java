@@ -191,6 +191,21 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
+    public void deleteEvent(Long organizationId, Long eventId) {
+        Event event = events.findByIdAndOrganizationId(eventId, organizationId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        if (event.getStatus() == EventStatus.CANCELED) {
+            throw new ConflictException("Event is already canceled");
+        }
+        if (hasEnded(event, LocalDateTime.now(clock))) {
+            throw new ConflictException("Event has already ended and cannot be deleted");
+        }
+        event.setStatus(EventStatus.CANCELED);
+        events.save(event);
+    }
+
+    @Override
     public List<EventSummaryResponse> discoverEvents(EventDiscoveryFilter filter) {
         if (filter.getFrom() != null && filter.getTo() != null && filter.getFrom().isAfter(filter.getTo())) {
             throw new BusinessRuleException("Invalid date range",
