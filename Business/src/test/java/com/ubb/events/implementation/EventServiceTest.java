@@ -213,10 +213,24 @@ class EventServiceTest {
 
         assertEquals(List.of(
                 new EventSummaryResponse(1L, "Hackathon", DATE, START, LocalTime.of(22, 0), "Room 1", EventStatus.PUBLISHED,
-                        new EventOrganizationSummaryResponse(7L, "Students")),
+                        new EventOrganizationSummaryResponse(7L, "Students"), 50L, 0L),
                 new EventSummaryResponse(2L, "Quiz", DATE.plusDays(1), START, null, null, EventStatus.PUBLISHED,
-                        new EventOrganizationSummaryResponse(8L, "Math club"))), result);
+                        new EventOrganizationSummaryResponse(8L, "Math club"), null, 0L)), result);
         verify(events).findAll(any(Specification.class), eq(CHRONOLOGICAL));
+    }
+
+    @Test
+    void discoversCanceledEventsAndIncludesCapacityAndSpotsTaken() {
+        Event canceled = new Event(3L, organization, 3L, "Canceled", "Description",
+                DATE, START, LocalTime.of(20, 0), "Room", 25L, EventStatus.CANCELED);
+        when(events.findAll(any(Specification.class), eq(CHRONOLOGICAL))).thenReturn(List.of(canceled));
+        when(registrations.countByEventId(3L)).thenReturn(4L);
+
+        List<EventSummaryResponse> result = service.discoverEvents(NO_FILTER);
+
+        assertEquals(EventStatus.CANCELED, result.get(0).getStatus());
+        assertEquals(25L, result.get(0).getCapacity());
+        assertEquals(4L, result.get(0).getSpotsTaken());
     }
 
     @Test
@@ -295,7 +309,7 @@ class EventServiceTest {
         try (MockedStatic<EventSpecifications> specifications = mockStatic(EventSpecifications.class, CALLS_REAL_METHODS)) {
             service.discoverEvents(new EventDiscoveryFilter("hack", 7L, DATE, DATE.plusDays(1)));
 
-            specifications.verify(EventSpecifications::isPublished);
+            specifications.verify(EventSpecifications::isDiscoverable);
             specifications.verify(() -> EventSpecifications.matchesSearch("hack"));
             specifications.verify(() -> EventSpecifications.inOrganization(7L));
             specifications.verify(() -> EventSpecifications.onOrAfter(DATE));
@@ -311,7 +325,7 @@ class EventServiceTest {
             service.discoverEvents(NO_FILTER);
             service.discoverEvents(new EventDiscoveryFilter("   ", null, null, null));
 
-            specifications.verify(EventSpecifications::isPublished, times(2));
+            specifications.verify(EventSpecifications::isDiscoverable, times(2));
             specifications.verify(() -> EventSpecifications.matchesSearch(anyString()), never());
             specifications.verify(() -> EventSpecifications.inOrganization(any()), never());
             specifications.verify(() -> EventSpecifications.onOrAfter(any()), never());
@@ -518,15 +532,18 @@ class EventServiceTest {
     }
 
     @Test
-    void deletingDraftSetsCanceledStatusInOrganizationView() {
+    void deletingDraftRemovesEventFromPersistence() {
         Event draft = completeDraft();
         when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
-        when(events.save(draft)).thenReturn(draft);
+        when(tasks.findAllByEventIdOrderByIdAsc(1L)).thenReturn(List.of());
+        when(registrations.findAllByEventIdAndOrganizationId(1L, 7L)).thenReturn(List.of());
 
         service.deleteEvent(7L, 1L);
 
-        assertEquals(EventStatus.CANCELED, draft.getStatus());
-        assertEquals(EventStatus.CANCELED, service.getOrganizationEvent(7L, 1L).getStatus());
+        verify(tasks).deleteAll(List.of());
+        verify(registrations).deleteAll(List.of());
+        verify(events).delete(draft);
+        verify(events, never()).save(any());
     }
 
     @Test

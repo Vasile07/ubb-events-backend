@@ -201,6 +201,14 @@ public class EventServiceImpl implements EventService {
         if (hasEnded(event, LocalDateTime.now(clock))) {
             throw new ConflictException("Event has already ended and cannot be deleted");
         }
+        if (event.getStatus() == EventStatus.DRAFT) {
+            tasks.deleteAll(tasks.findAllByEventIdOrderByIdAsc(eventId));
+            if (registrations != null) {
+                registrations.deleteAll(registrations.findAllByEventIdAndOrganizationId(eventId, organizationId));
+            }
+            events.delete(event);
+            return;
+        }
         event.setStatus(EventStatus.CANCELED);
         events.save(event);
     }
@@ -251,7 +259,7 @@ public class EventServiceImpl implements EventService {
     }
 
     private static Specification<Event> discoverySpecification(EventDiscoveryFilter filter) {
-        Specification<Event> specification = EventSpecifications.isPublished();
+        Specification<Event> specification = EventSpecifications.isDiscoverable();
         if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
             specification = specification.and(EventSpecifications.matchesSearch(filter.getSearch()));
         }
@@ -267,7 +275,7 @@ public class EventServiceImpl implements EventService {
         return specification;
     }
 
-    private static EventSummaryResponse toSummaryResponse(Event event) {
+    private EventSummaryResponse toSummaryResponse(Event event) {
         return new EventSummaryResponse(
                 event.getId(),
                 event.getTitle(),
@@ -276,7 +284,9 @@ public class EventServiceImpl implements EventService {
                 event.getEndTime(),
                 event.getLocation(),
                 event.getStatus(),
-                new EventOrganizationSummaryResponse(event.getOrganization().getId(), event.getOrganization().getName()));
+                new EventOrganizationSummaryResponse(event.getOrganization().getId(), event.getOrganization().getName()),
+                event.getCapacity(),
+                registrations == null ? 0L : registrations.countByEventId(event.getId()));
     }
 
     // Field validation (title, description, end time, location, capacity) is done when the event is

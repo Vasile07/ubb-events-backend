@@ -20,4 +20,11 @@ public final class EventSummaryResponse {
     private final String location;
     private final EventStatus status;
     private final EventOrganizationSummaryResponse organization;
+    private final Long capacity;
+    private final Long spotsTaken;
+
+    public EventSummaryResponse(Long id, String title, LocalDate date, LocalTime startTime, LocalTime endTime,
+            String location, EventStatus status, EventOrganizationSummaryResponse organization) {
+        this(id, title, date, startTime, endTime, location, status, organization, null, null);
+    }
 }

@@ -54,15 +54,18 @@ class DiscoverEventControllerApiTest {
         when(eventService.discoverEvents(NO_FILTER)).thenReturn(List.of(
                 new EventSummaryResponse(1L, "Hackathon", LocalDate.of(2026, 11, 20), LocalTime.of(18, 0),
                         LocalTime.of(22, 0), "Room 1", EventStatus.PUBLISHED,
-                        new EventOrganizationSummaryResponse(7L, "Students")),
+                        new EventOrganizationSummaryResponse(7L, "Students"), 50L, 12L),
                 new EventSummaryResponse(2L, "Quiz", LocalDate.of(2026, 11, 21), LocalTime.of(18, 0),
                         null, null, EventStatus.PUBLISHED,
-                        new EventOrganizationSummaryResponse(8L, "Math club"))));
+                        new EventOrganizationSummaryResponse(8L, "Math club"), 100L, 4L),
+                new EventSummaryResponse(3L, "Canceled", LocalDate.of(2026, 11, 22), LocalTime.of(18, 0),
+                        null, "Room 2", EventStatus.CANCELED,
+                        new EventOrganizationSummaryResponse(7L, "Students"), 25L, 2L)));
 
         mockMvc.perform(get(DISCOVER_URL)
                         .header("Authorization", "Bearer " + tokenService.issue(42L)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].title").value("Hackathon"))
                 .andExpect(jsonPath("$[0].date").value("2026-11-20"))
@@ -73,9 +76,13 @@ class DiscoverEventControllerApiTest {
                 .andExpect(jsonPath("$[0].organization.id").value(7))
                 .andExpect(jsonPath("$[0].organization.name").value("Students"))
                 .andExpect(jsonPath("$[0].description").doesNotExist())
-                .andExpect(jsonPath("$[0].capacity").doesNotExist())
+                .andExpect(jsonPath("$[0].capacity").value(50))
+                .andExpect(jsonPath("$[0].spotsTaken").value(12))
                 .andExpect(jsonPath("$[0].tasks").doesNotExist())
-                .andExpect(jsonPath("$[1].organization.name").value("Math club"));
+                .andExpect(jsonPath("$[1].organization.name").value("Math club"))
+                .andExpect(jsonPath("$[2].status").value("CANCELED"))
+                .andExpect(jsonPath("$[2].capacity").value(25))
+                .andExpect(jsonPath("$[2].spotsTaken").value(2));
         verify(eventService).discoverEvents(NO_FILTER);
     }
 

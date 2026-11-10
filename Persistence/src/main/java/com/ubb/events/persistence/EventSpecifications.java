@@ -11,8 +11,8 @@ public final class EventSpecifications {
 
     private EventSpecifications() { }
 
-    public static Specification<Event> isPublished() {
-        return (root, query, cb) -> cb.equal(root.get("status"), EventStatus.PUBLISHED);
+    public static Specification<Event> isDiscoverable() {
+        return (root, query, cb) -> root.get("status").in(EventStatus.PUBLISHED, EventStatus.CANCELED);
     }
 
     public static Specification<Event> matchesSearch(String search) {
