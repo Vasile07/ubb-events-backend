@@ -26,20 +26,6 @@ public class MessageServiceImpl implements MessageService {
     private final UserRepository users;
     private final Clock clock;
 
-    public MessageServiceImpl(MessageRepository messages, EventRepository events) {
-        this.messages = messages;
-        this.events = events;
-        this.users = null;
-        this.clock = Clock.systemUTC();
-    }
-
-    public MessageServiceImpl(MessageRepository messages, EventRepository events, UserRepository users) {
-        this.messages = messages;
-        this.events = events;
-        this.users = users;
-        this.clock = Clock.systemUTC();
-    }
-
     public MessageServiceImpl(MessageRepository messages, EventRepository events, UserRepository users, Clock clock) {
         this.messages = messages;
         this.events = events;
