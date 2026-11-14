@@ -67,6 +67,19 @@ class EventControllerStructureTest {
         assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
     }
 
+    @Test
+    void updateHandlerIsMappedForManagersOnly() throws Exception {
+        Method method = EventController.class.getDeclaredMethod("updateEvent", Long.class, Long.class,
+                com.ubb.events.dto.UpdateEventRequest.class);
+        assertNotNull(method.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class), "updateEvent must be a PUT handler");
+        assertEquals("/{organizationId}/events/{eventId}",
+                method.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class).value()[0]);
+        assertNotNull(method.getAnnotation(RequireOrgPermission.class));
+        assertEquals(EffectiveOrgRole.MANAGER, method.getAnnotation(RequireOrgPermission.class).value());
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.Operation.class));
+        assertNotNull(method.getAnnotation(io.swagger.v3.oas.annotations.responses.ApiResponses.class));
+    }
+
     private static void assertMemberGet(Method method, String path) {
         assertNotNull(method.getAnnotation(GetMapping.class), method.getName() + " must be a GET handler");
         assertEquals(path, method.getAnnotation(GetMapping.class).value()[0]);

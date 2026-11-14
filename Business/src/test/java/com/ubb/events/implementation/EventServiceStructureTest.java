@@ -47,4 +47,12 @@ class EventServiceStructureTest {
         assertTrue(EventServiceImpl.class.getDeclaredMethod("createEvent", Long.class,
                 com.ubb.events.dto.CreateEventRequest.class).isAnnotationPresent(Transactional.class));
     }
+
+    @Test
+    void updateIsTransactional() throws Exception {
+        assertNotNull(EventService.class.getDeclaredMethod("updateEvent", Long.class, Long.class,
+                com.ubb.events.dto.UpdateEventRequest.class));
+        assertTrue(EventServiceImpl.class.getDeclaredMethod("updateEvent", Long.class, Long.class,
+                com.ubb.events.dto.UpdateEventRequest.class).isAnnotationPresent(Transactional.class));
+    }
 }

@@ -19,6 +19,7 @@ import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
 import com.ubb.events.dto.EventTaskRequest;
+import com.ubb.events.dto.UpdateEventRequest;
 import com.ubb.events.persistence.EventRepository;
 import com.ubb.events.persistence.EventTaskRepository;
 import com.ubb.events.persistence.MembershipRepository;
@@ -73,6 +74,110 @@ class EventServiceTest {
     private Event completeDraft() {
         return new Event(1L, organization, 3L, "Hackathon", "Coding night",
                 DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT);
+    }
+
+    private static UpdateEventRequest validUpdate() {
+        return new UpdateEventRequest(4L, "Big Hackathon", "All night", DATE.plusDays(1),
+                LocalTime.of(17, 0), LocalTime.of(23, 0), "Aula Magna", 80L);
+    }
+
+    @Test
+    void updatesDraftEventDetails() {
+        Event draft = completeDraft();
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
+        when(registrations.countByEventId(1L)).thenReturn(0L);
+        when(events.save(draft)).thenReturn(draft);
+
+        EventResponse result = service.updateEvent(7L, 1L, validUpdate());
+
+        assertEquals(new EventResponse(1L, 7L, 4L, "Big Hackathon", "All night", DATE.plusDays(1),
+                LocalTime.of(17, 0), LocalTime.of(23, 0), "Aula Magna", 80L, EventStatus.DRAFT), result);
+        verify(events).save(draft);
+    }
+
+    @Test
+    void updatesPublishedEventKeepingStatus() {
+        Event published = completeDraft();
+        published.setStatus(EventStatus.PUBLISHED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(published));
+        when(registrations.countByEventId(1L)).thenReturn(30L);
+        when(events.save(published)).thenReturn(published);
+
+        assertEquals(EventStatus.PUBLISHED, service.updateEvent(7L, 1L, validUpdate()).getStatus());
+        assertEquals("Big Hackathon", published.getTitle());
+    }
+
+    @Test
+    void rejectsInvalidDetailsListingEveryField() {
+        Event draft = completeDraft();
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(draft));
+        UpdateEventRequest invalid = new UpdateEventRequest(null, " ", "Still fine", TODAY,
+                LocalTime.of(9, 0), LocalTime.of(8, 0), null, 0L);
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class, () -> service.updateEvent(7L, 1L, invalid));
+
+        assertEquals("Event details are invalid", exception.getMessage());
+        assertEquals(List.of("categoryId", "title", "date", "endTime", "location", "capacity"), fields(exception));
+        assertEquals("Hackathon", draft.getTitle());
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void rejectsCapacityBelowActiveRegistrations() {
+        Event published = completeDraft();
+        published.setStatus(EventStatus.PUBLISHED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(published));
+        when(registrations.countByEventId(1L)).thenReturn(81L);
+
+        BusinessRuleException exception = assertThrows(BusinessRuleException.class,
+                () -> service.updateEvent(7L, 1L, validUpdate()));
+
+        assertEquals(List.of("capacity"), fields(exception));
+        assertEquals("Capacity cannot be lower than the 81 active registrations", exception.getErrors().get(0).getMessage());
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void acceptsCapacityEqualToActiveRegistrations() {
+        Event published = completeDraft();
+        published.setStatus(EventStatus.PUBLISHED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(published));
+        when(registrations.countByEventId(1L)).thenReturn(80L);
+        when(events.save(published)).thenReturn(published);
+
+        assertEquals(80L, service.updateEvent(7L, 1L, validUpdate()).getCapacity());
+    }
+
+    @Test
+    void rejectsEditingCanceledEvent() {
+        Event canceled = completeDraft();
+        canceled.setStatus(EventStatus.CANCELED);
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(canceled));
+
+        assertEquals("A canceled event cannot be edited",
+                assertThrows(ConflictException.class, () -> service.updateEvent(7L, 1L, validUpdate())).getMessage());
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void rejectsEditingEndedEvent() {
+        Event ended = completeDraft();
+        ended.setStatus(EventStatus.PUBLISHED);
+        ended.setDate(LocalDate.of(2026, 10, 1));
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.of(ended));
+
+        assertEquals("Event has already ended and cannot be edited",
+                assertThrows(ConflictException.class, () -> service.updateEvent(7L, 1L, validUpdate())).getMessage());
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void updateThrowsNotFoundForEventOfAnotherOrganization() {
+        when(events.findByIdAndOrganizationId(1L, 7L)).thenReturn(Optional.empty());
+
+        assertEquals("Event not found",
+                assertThrows(NotFoundException.class, () -> service.updateEvent(7L, 1L, validUpdate())).getMessage());
+        verify(events, never()).save(any());
     }
 
     @Test
