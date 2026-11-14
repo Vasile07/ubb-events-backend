@@ -54,7 +54,7 @@ public class OrganizationServiceImpl implements OrganizationService {
         }
 
         return new OrganizationDetailsResponse(
-                organization.getId(), organization.getName(), organization.getDescription(), organization.getCategory(), status);
+                organization.getId(), organization.getName(), organization.getDescription(), status);
     }
 
     private OrganizationResponse toResponse(Organization organization, Membership membership) {

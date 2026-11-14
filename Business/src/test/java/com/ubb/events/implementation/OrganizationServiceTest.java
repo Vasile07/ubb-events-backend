@@ -61,17 +61,13 @@ class OrganizationServiceTest {
     @Test
     void getsDetailsAndMapsMembershipStatusWithoutPrivateFields() {
         Organization organization = new Organization(7L, "Students", "Public description", "private-logo");
-        organization.setCategory("Business & Economics");
         when(organizations.findById(7L)).thenReturn(Optional.of(organization));
         when(memberships.findByUserIdAndOrganizationId(42L, 7L)).thenReturn(
                 Optional.of(new Membership(1L, null, organization, MembershipRole.MANAGER, MembershipStatus.ACTIVE)));
 
         OrganizationDetailsResponse result = service.getOrganizationDetails(42L, 7L);
 
-        assertEquals("category", OrganizationDetailsResponse.class.getRecordComponents()[3].getName());
-        assertEquals("Public description", result.description());
-        assertEquals("Business & Economics", result.category());
-        assertEquals(new OrganizationDetailsResponse(7L, "Students", "Public description", "Business & Economics",
+        assertEquals(new OrganizationDetailsResponse(7L, "Students", "Public description",
                 com.ubb.events.dto.OrganizationMembershipStatus.MEMBER), result);
     }
 

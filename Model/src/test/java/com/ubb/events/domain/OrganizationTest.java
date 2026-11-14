@@ -24,7 +24,6 @@ class OrganizationTest {
         assertEquals(GenerationType.IDENTITY, id.getAnnotation(GeneratedValue.class).strategy());
         assertColumn("name", "name", false);
         assertColumn("description", "description", true);
-        assertColumn("category", "category", true);
         assertColumn("logoUrl", "logo_url", true);
     }
 
@@ -34,12 +33,6 @@ class OrganizationTest {
         assertEquals("UBB CS", organization.getName());
         assertNull(organization.getDescription());
         assertNull(organization.getLogoUrl());
-    }
-
-    @Test
-    void organizationStoresNullableCategory() {
-        Organization organization = new Organization(null, "UBB CS", "desc", "Business & Economics", null);
-        assertEquals("Business & Economics", organization.getCategory());
     }
 
     private static void assertColumn(String fieldName, String columnName, boolean nullable)
