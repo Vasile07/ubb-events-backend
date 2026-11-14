@@ -86,6 +86,20 @@ class MessageControllerApiTest {
     }
 
     @Test
+    void sendRouteRemainsTheApiDeliveryTrigger() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(messageService.sendMessage(eq(7L), eq(3L), eq(42L), any())).thenReturn(
+                new MessageResponse(11L, 42L, "Broadcast", java.time.OffsetDateTime.parse("2026-01-02T03:04:05Z")));
+
+        mockMvc.perform(post("/api/organizations/7/events/3/messages")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType(APPLICATION_JSON).content("{\"content\":\"Broadcast\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.content").value("Broadcast"));
+        verify(messageService).sendMessage(eq(7L), eq(3L), eq(42L), any());
+    }
+
+    @Test
     void managerCanSendMessage() throws Exception {
         when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
         when(messageService.sendMessage(eq(7L), eq(3L), eq(43L), any())).thenReturn(

@@ -1,6 +1,7 @@
 package com.ubb.events.implementation;
 
 import com.ubb.events.MessageService;
+import com.ubb.events.ChatMessagePublisher;
 import com.ubb.events.common.errors.BusinessRuleException;
 import com.ubb.events.common.errors.ConflictException;
 import com.ubb.events.common.errors.NotFoundException;
@@ -26,12 +27,14 @@ public class MessageServiceImpl implements MessageService {
     private final EventRepository events;
     private final UserRepository users;
     private final Clock clock;
+    private final ChatMessagePublisher publisher;
 
     public MessageServiceImpl(MessageRepository messages, EventRepository events) {
         this.messages = messages;
         this.events = events;
         this.users = null;
         this.clock = Clock.systemUTC();
+        this.publisher = messagePublisherNoop();
     }
 
     public MessageServiceImpl(MessageRepository messages, EventRepository events, UserRepository users) {
@@ -39,14 +42,30 @@ public class MessageServiceImpl implements MessageService {
         this.events = events;
         this.users = users;
         this.clock = Clock.systemUTC();
+        this.publisher = messagePublisherNoop();
     }
 
     @Autowired
+    public MessageServiceImpl(MessageRepository messages, EventRepository events, UserRepository users, Clock clock,
+            ChatMessagePublisher publisher) {
+        this.messages = messages;
+        this.events = events;
+        this.users = users;
+        this.clock = clock;
+        this.publisher = publisher;
+    }
+
+    /** Compatibility constructor used by focused service tests. */
     public MessageServiceImpl(MessageRepository messages, EventRepository events, UserRepository users, Clock clock) {
         this.messages = messages;
         this.events = events;
         this.users = users;
         this.clock = clock;
+        this.publisher = messagePublisherNoop();
+    }
+
+    private ChatMessagePublisher messagePublisherNoop() {
+        return (organizationId, eventId, message) -> { };
     }
 
     @Override
@@ -77,6 +96,8 @@ public class MessageServiceImpl implements MessageService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         Message message = new Message(null, event, author, request.getContent(), OffsetDateTime.now(clock));
         Message saved = messages.save(message);
-        return new MessageResponse(saved.getId(), saved.getSender().getId(), saved.getContent(), saved.getSentAt());
+        MessageResponse response = new MessageResponse(saved.getId(), saved.getSender().getId(), saved.getContent(), saved.getSentAt());
+        publisher.publish(organizationId, eventId, response);
+        return response;
     }
 }
