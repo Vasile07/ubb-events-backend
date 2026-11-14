@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MessageControllerStructureTest {
     @Test
-    void controllerDefinesRootMappingAndServiceDependencyWithoutHandlers() throws Exception {
+    void controllerDefinesOrganizationRootMappingAndServiceDependency() throws Exception {
         assertTrue(MessageController.class.isAnnotationPresent(RestController.class));
-        assertEquals("/api/chat-messages", MessageController.class.getAnnotation(RequestMapping.class).value()[0]);
-        assertEquals(0, MessageController.class.getDeclaredMethods().length);
+        assertEquals("/api/organizations", MessageController.class.getAnnotation(RequestMapping.class).value()[0]);
+        assertTrue(MessageController.class.getDeclaredMethods().length >= 2);
         Constructor<?> constructor = MessageController.class.getDeclaredConstructor(MessageService.class);
         assertNotNull(constructor);
     }

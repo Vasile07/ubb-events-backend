@@ -7,6 +7,8 @@ import com.ubb.events.domain.Organization;
 import com.ubb.events.domain.User;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +31,8 @@ class MessageRepositoryTest {
     void savesAndReloadsMessageWithEventSenderAndContent() {
         User user = userRepository.saveAndFlush(new User(null, "Ana", "Student", "message@example.com", "password"));
         Event event = saveEvent();
-        Message saved = repository.saveAndFlush(new Message(null, event, user, "Hello"));
+        OffsetDateTime sentAt = OffsetDateTime.of(2026, 1, 2, 3, 4, 5, 0, ZoneOffset.UTC);
+        Message saved = repository.saveAndFlush(new Message(null, event, user, "Hello", sentAt));
 
         assertNotNull(saved.getId());
         entityManager.clear();
@@ -38,6 +41,9 @@ class MessageRepositoryTest {
         assertEquals(event.getId(), reloaded.getEvent().getId());
         assertEquals(user.getId(), reloaded.getSender().getId());
         assertEquals("Hello", reloaded.getContent());
+        assertNotNull(saved.getSentAt());
+        assertNotNull(reloaded.getSentAt());
+        assertEquals(sentAt, reloaded.getSentAt());
     }
 
     @Test

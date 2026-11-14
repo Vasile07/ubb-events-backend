@@ -15,8 +15,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import com.ubb.events.common.errors.ConflictException;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -64,5 +67,57 @@ class MessageControllerApiTest {
         mockMvc.perform(get("/api/organizations/7/events/3/messages"))
                 .andExpect(status().isUnauthorized());
         verifyNoInteractions(messageService);
+    }
+
+    @Test
+    void memberCanSendMessageAndReceivesCreatedResponse() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(messageService.sendMessage(eq(7L), eq(3L), eq(42L), any())).thenReturn(
+                new MessageResponse(9L, 42L, "Hello", java.time.OffsetDateTime.parse("2026-01-02T03:04:05Z")));
+
+        mockMvc.perform(post("/api/organizations/7/events/3/messages")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType(APPLICATION_JSON).content("{\"content\":\"Hello\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(9))
+                .andExpect(jsonPath("$.senderId").value(42))
+                .andExpect(jsonPath("$.content").value("Hello"))
+                .andExpect(jsonPath("$.sentAt").value("2026-01-02T03:04:05Z"));
+    }
+
+    @Test
+    void managerCanSendMessage() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(messageService.sendMessage(eq(7L), eq(3L), eq(43L), any())).thenReturn(
+                new MessageResponse(10L, 43L, "Manager note", java.time.OffsetDateTime.parse("2026-01-02T03:04:05Z")));
+
+        mockMvc.perform(post("/api/organizations/7/events/3/messages")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType(APPLICATION_JSON).content("{\"content\":\"Manager note\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.senderId").value(43));
+    }
+
+    @Test
+    void blankMessageIsRejectedByValidation() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        mockMvc.perform(post("/api/organizations/7/events/3/messages")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType(APPLICATION_JSON).content("{\"content\":\" \"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(messageService);
+    }
+
+    @Test
+    void canceledEventReturnsConflict() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(messageService.sendMessage(eq(7L), eq(3L), eq(42L), any()))
+                .thenThrow(new ConflictException("A canceled event cannot receive messages"));
+        mockMvc.perform(post("/api/organizations/7/events/3/messages")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType(APPLICATION_JSON).content("{\"content\":\"Hello\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A canceled event cannot receive messages"));
     }
 }
