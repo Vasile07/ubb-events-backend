@@ -8,10 +8,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.PrePersist;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "messages", schema = "public")
@@ -35,4 +37,18 @@ public class Message {
 
     @Column(name = "content", nullable = false)
     private String content;
+
+    @Column(name = "sent_at", nullable = false)
+    private OffsetDateTime sentAt;
+
+    public Message(Long id, Event event, User sender, String content) {
+        this(id, event, sender, content, null);
+    }
+
+    @PrePersist
+    void assignTimestamp() {
+        if (sentAt == null) {
+            sentAt = OffsetDateTime.now(java.time.Clock.systemUTC());
+        }
+    }
 }
