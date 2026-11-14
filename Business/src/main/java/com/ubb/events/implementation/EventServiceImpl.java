@@ -17,6 +17,7 @@ import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
+import com.ubb.events.dto.UpdateEventRequest;
 import com.ubb.events.dto.EventTaskRequest;
 import com.ubb.events.persistence.EventRepository;
 import com.ubb.events.persistence.EventTaskRepository;
@@ -25,6 +26,7 @@ import com.ubb.events.persistence.OrganizationRepository;
 import com.ubb.events.persistence.EventSpecifications;
 import com.ubb.events.persistence.RegistrationRepository;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -115,40 +117,86 @@ public class EventServiceImpl implements EventService {
         return toResponse(savedEvent);
     }
 
-    private List<ErrorDetail> validateEventDetails(CreateEventRequest request) {
-        List<ErrorDetail> errors = new ArrayList<>();
-        if (request == null) {
-            errors.add(new ErrorDetail("event", "Event details are required"));
-            return errors;
+    @Override
+    @Transactional
+    public EventResponse updateEvent(Long organizationId, Long eventId, UpdateEventRequest request) {
+        Event event = events.findByIdAndOrganizationId(eventId, organizationId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        if (event.getStatus() == EventStatus.CANCELED) {
+            throw new ConflictException("A canceled event cannot be edited");
         }
-        if (request.getCategoryId() == null) {
+        if (hasEnded(event, LocalDateTime.now(clock))) {
+            throw new ConflictException("Event has already ended and cannot be edited");
+        }
+
+        List<ErrorDetail> errors = request == null
+                ? new ArrayList<>(List.of(new ErrorDetail("event", "Event details are required")))
+                : validateEventDetails(request.getCategoryId(), request.getTitle(), request.getDescription(),
+                        request.getDate(), request.getStartTime(), request.getEndTime(), request.getLocation(),
+                        request.getCapacity());
+        if (request != null && request.getCapacity() != null && request.getCapacity() > 0 && registrations != null) {
+            long activeRegistrations = registrations.countByEventId(eventId);
+            if (request.getCapacity() < activeRegistrations) {
+                errors.add(new ErrorDetail("capacity",
+                        "Capacity cannot be lower than the " + activeRegistrations + " active registrations"));
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new BusinessRuleException("Event details are invalid", errors);
+        }
+
+        event.setCategoryId(request.getCategoryId());
+        event.setTitle(request.getTitle());
+        event.setDescription(request.getDescription());
+        event.setDate(request.getDate());
+        event.setStartTime(request.getStartTime());
+        event.setEndTime(request.getEndTime());
+        event.setLocation(request.getLocation());
+        event.setCapacity(request.getCapacity());
+        return toResponse(events.save(event));
+    }
+
+    private List<ErrorDetail> validateEventDetails(CreateEventRequest request) {
+        if (request == null) {
+            return new ArrayList<>(List.of(new ErrorDetail("event", "Event details are required")));
+        }
+        return validateEventDetails(request.getCategoryId(), request.getTitle(), request.getDescription(),
+                request.getDate(), request.getStartTime(), request.getEndTime(), request.getLocation(),
+                request.getCapacity());
+    }
+
+    // Shared by create (T23) and edit (T26): the field rules moved out of publishing in T28.
+    private List<ErrorDetail> validateEventDetails(Long categoryId, String title, String description, LocalDate date,
+            LocalTime startTime, LocalTime endTime, String location, Long capacity) {
+        List<ErrorDetail> errors = new ArrayList<>();
+        if (categoryId == null) {
             errors.add(new ErrorDetail("categoryId", "Category is required"));
         }
-        if (request.getTitle() == null || request.getTitle().isBlank()) {
+        if (title == null || title.isBlank()) {
             errors.add(new ErrorDetail("title", "Title is required"));
         }
-        if (request.getDescription() == null || request.getDescription().isBlank()) {
+        if (description == null || description.isBlank()) {
             errors.add(new ErrorDetail("description", "Description is required"));
         }
-        if (request.getDate() == null) {
+        if (date == null) {
             errors.add(new ErrorDetail("date", "Date is required"));
         }
-        if (request.getStartTime() == null) {
+        if (startTime == null) {
             errors.add(new ErrorDetail("startTime", "Start time is required"));
         }
-        if (request.getDate() != null && request.getStartTime() != null
-                && !LocalDateTime.of(request.getDate(), request.getStartTime()).isAfter(LocalDateTime.now(clock))) {
+        if (date != null && startTime != null
+                && !LocalDateTime.of(date, startTime).isAfter(LocalDateTime.now(clock))) {
             errors.add(new ErrorDetail("date", "Event must start in the future"));
         }
-        if (request.getEndTime() == null) {
+        if (endTime == null) {
             errors.add(new ErrorDetail("endTime", "End time is required"));
-        } else if (request.getStartTime() != null && !request.getEndTime().isAfter(request.getStartTime())) {
+        } else if (startTime != null && !endTime.isAfter(startTime)) {
             errors.add(new ErrorDetail("endTime", "End time must be after start time"));
         }
-        if (request.getLocation() == null || request.getLocation().isBlank()) {
+        if (location == null || location.isBlank()) {
             errors.add(new ErrorDetail("location", "Location is required"));
         }
-        if (request.getCapacity() == null || request.getCapacity() <= 0) {
+        if (capacity == null || capacity <= 0) {
             errors.add(new ErrorDetail("capacity", "Capacity must be greater than zero"));
         }
         return errors;

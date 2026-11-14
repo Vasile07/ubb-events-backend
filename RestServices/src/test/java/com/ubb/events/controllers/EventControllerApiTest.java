@@ -32,6 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -385,5 +386,68 @@ class EventControllerApiTest {
                         .header("Authorization", "Bearer " + tokenService.issue(43L)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Event not found"));
+    }
+
+    private static final String EVENT_URL = "/api/organizations/7/events/1";
+    private static final String UPDATE_BODY = """
+            {"categoryId":4,"title":"Big Hackathon","description":"All night","date":"2026-11-21",
+             "startTime":"17:00:00","endTime":"23:00:00","location":"Aula Magna","capacity":80}
+            """;
+    private static final com.ubb.events.dto.UpdateEventRequest UPDATE_REQUEST = new com.ubb.events.dto.UpdateEventRequest(
+            4L, "Big Hackathon", "All night", LocalDate.of(2026, 11, 21), LocalTime.of(17, 0), LocalTime.of(23, 0), "Aula Magna", 80L);
+
+    @Test
+    void managerUpdatesEvent() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(eventService.updateEvent(7L, 1L, UPDATE_REQUEST)).thenReturn(new EventResponse(1L, 7L, 4L, "Big Hackathon",
+                "All night", LocalDate.of(2026, 11, 21), LocalTime.of(17, 0), LocalTime.of(23, 0), "Aula Magna", 80L, EventStatus.DRAFT));
+
+        mockMvc.perform(put(EVENT_URL)
+                        .header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType("application/json")
+                        .content(UPDATE_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Big Hackathon"))
+                .andExpect(jsonPath("$.date").value("2026-11-21"))
+                .andExpect(jsonPath("$.startTime").value("17:00:00"))
+                .andExpect(jsonPath("$.capacity").value(80))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+        verify(eventService).updateEvent(7L, 1L, UPDATE_REQUEST);
+    }
+
+    @Test
+    void memberCannotUpdateEventAndTokenIsRequired() throws Exception {
+        mockMvc.perform(put(EVENT_URL).contentType("application/json").content(UPDATE_BODY))
+                .andExpect(status().isUnauthorized());
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(false);
+        mockMvc.perform(put(EVENT_URL)
+                        .header("Authorization", "Bearer " + tokenService.issue(42L))
+                        .contentType("application/json")
+                        .content(UPDATE_BODY))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void updateErrorsAreMapped() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(eventService.updateEvent(7L, 1L, UPDATE_REQUEST))
+                .thenThrow(new BusinessRuleException("Event details are invalid",
+                        List.of(new ErrorDetail("capacity", "Capacity cannot be lower than the 81 active registrations"))))
+                .thenThrow(new NotFoundException("Event not found"))
+                .thenThrow(new ConflictException("A canceled event cannot be edited"));
+
+        mockMvc.perform(put(EVENT_URL).header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType("application/json").content(UPDATE_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Event details are invalid"))
+                .andExpect(jsonPath("$.errors[0].field").value("capacity"));
+        mockMvc.perform(put(EVENT_URL).header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType("application/json").content(UPDATE_BODY))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(put(EVENT_URL).header("Authorization", "Bearer " + tokenService.issue(43L))
+                        .contentType("application/json").content(UPDATE_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A canceled event cannot be edited"));
     }
 }
