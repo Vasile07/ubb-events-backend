@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class MessageServiceImpl implements MessageService {
@@ -40,6 +41,7 @@ public class MessageServiceImpl implements MessageService {
         this.clock = Clock.systemUTC();
     }
 
+    @Autowired
     public MessageServiceImpl(MessageRepository messages, EventRepository events, UserRepository users, Clock clock) {
         this.messages = messages;
         this.events = events;

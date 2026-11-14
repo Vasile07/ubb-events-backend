@@ -8,10 +8,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AnnouncementServiceStructureTest {
     @Test
-    void implementationIsAnnotatedAndHasNoOperations() {
+    void implementationIsAnnotatedAndExposesCreateOperation() {
         assertTrue(AnnouncementServiceImpl.class.isAnnotationPresent(Service.class));
         assertTrue(AnnouncementService.class.isAssignableFrom(AnnouncementServiceImpl.class));
-        assertEquals(0, AnnouncementService.class.getDeclaredMethods().length);
-        assertEquals(0, AnnouncementServiceImpl.class.getDeclaredMethods().length);
+        assertTrue(java.util.Arrays.stream(AnnouncementService.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().equals("create")));
+        assertTrue(java.util.Arrays.stream(AnnouncementServiceImpl.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().equals("create")));
     }
 }
