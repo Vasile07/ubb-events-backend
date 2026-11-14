@@ -19,6 +19,10 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Organization {
 
+    public Organization(Long id, String name, String description, String logoUrl) {
+        this(id, name, description, null, logoUrl);
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "organization_id", nullable = false)
@@ -29,6 +33,9 @@ public class Organization {
 
     @Column(name = "description")
     private String description;
+
+    @Column(name = "category")
+    private String category;
 
     @Column(name = "logo_url")
     private String logoUrl;

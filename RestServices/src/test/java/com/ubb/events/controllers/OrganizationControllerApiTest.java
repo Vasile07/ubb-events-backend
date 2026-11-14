@@ -64,7 +64,7 @@ class OrganizationControllerApiTest {
     @Test
     void authenticatedDetailsReturnsPublicFieldsAndStatusOnly() throws Exception {
         when(organizationService.getOrganizationDetails(42L, 7L)).thenReturn(
-                new OrganizationDetailsResponse(7L, "Students", "Public description",
+                new OrganizationDetailsResponse(7L, "Students", "Public description", "Business & Economics",
                         OrganizationMembershipStatus.MEMBER));
 
         mockMvc.perform(get("/api/organizations/7")
@@ -73,6 +73,7 @@ class OrganizationControllerApiTest {
                 .andExpect(jsonPath("$.organizationId").value(7))
                 .andExpect(jsonPath("$.name").value("Students"))
                 .andExpect(jsonPath("$.description").value("Public description"))
+                .andExpect(jsonPath("$.category").value("Business & Economics"))
                 .andExpect(jsonPath("$.status").value("MEMBER"))
                 .andExpect(jsonPath("$.role").doesNotExist())
                 .andExpect(jsonPath("$.logoUrl").doesNotExist())
