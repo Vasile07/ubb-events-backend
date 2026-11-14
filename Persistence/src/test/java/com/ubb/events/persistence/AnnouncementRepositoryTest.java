@@ -50,6 +50,17 @@ class AnnouncementRepositoryTest {
         assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(new Announcement(null, event, "Title", null)));
     }
 
+    @Test
+    void listsAnnouncementsForEventInIdOrder() {
+        Event event = saveEvent();
+        Announcement first = repository.saveAndFlush(new Announcement(null, event, "First", "One"));
+        Announcement second = repository.saveAndFlush(new Announcement(null, event, "Second", "Two"));
+        Event otherEvent = saveEvent();
+        repository.saveAndFlush(new Announcement(null, otherEvent, "Other", "Event"));
+        var result = repository.findAllByEventIdOrderByIdAsc(event.getId());
+        assertEquals(java.util.List.of(first.getId(), second.getId()), result.stream().map(Announcement::getId).toList());
+    }
+
     private Event saveEvent() {
         Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
         return eventRepository.saveAndFlush(new Event(null, organization, 1L, "Hackathon", "Coding night",
