@@ -14,6 +14,7 @@ import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.OrganizationEventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
@@ -203,9 +204,9 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    public List<EventResponse> listOrganizationEvents(Long organizationId) {
+    public List<OrganizationEventResponse> listOrganizationEvents(Long organizationId) {
         return events.findAllByOrganizationIdOrderByDateAscStartTimeAsc(organizationId).stream()
-                .map(EventServiceImpl::toResponse)
+                .map(this::toOrganizationEventResponse)
                 .toList();
     }
 
@@ -361,5 +362,21 @@ public class EventServiceImpl implements EventService {
                 event.getLocation(),
                 event.getCapacity(),
                 event.getStatus());
+    }
+
+    private OrganizationEventResponse toOrganizationEventResponse(Event event) {
+        return new OrganizationEventResponse(
+                event.getId(),
+                event.getOrganization().getId(),
+                event.getCategoryId(),
+                event.getTitle(),
+                event.getDescription(),
+                event.getDate(),
+                event.getStartTime(),
+                event.getEndTime(),
+                event.getLocation(),
+                event.getCapacity(),
+                event.getStatus(),
+                registrations == null ? 0L : registrations.countByEventId(event.getId()));
     }
 }

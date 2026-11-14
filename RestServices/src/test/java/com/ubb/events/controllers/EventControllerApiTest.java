@@ -12,6 +12,7 @@ import com.ubb.events.domain.EventStatus;
 import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventRegistrationResponse;
+import com.ubb.events.dto.OrganizationEventResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -135,12 +136,12 @@ class EventControllerApiTest {
     void memberReceivesAllOrganizationEvents() throws Exception {
         when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
         when(eventService.listOrganizationEvents(7L)).thenReturn(List.of(
-                new EventResponse(1L, 7L, 3L, "Hackathon", "Coding night",
-                        DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT),
-                new EventResponse(2L, 7L, 3L, "Workshop", "Spring Boot",
-                        DATE.plusDays(1), START, null, null, null, EventStatus.PUBLISHED),
-                new EventResponse(3L, 7L, 4L, "Party", "Canceled party",
-                        DATE.plusDays(2), START, null, null, null, EventStatus.CANCELED)));
+                new OrganizationEventResponse(1L, 7L, 3L, "Hackathon", "Coding night",
+                        DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT, 4L),
+                new OrganizationEventResponse(2L, 7L, 3L, "Workshop", "Spring Boot",
+                        DATE.plusDays(1), START, null, null, null, EventStatus.PUBLISHED, 18L),
+                new OrganizationEventResponse(3L, 7L, 4L, "Party", "Canceled party",
+                        DATE.plusDays(2), START, null, null, null, EventStatus.CANCELED, 0L)));
 
         mockMvc.perform(get("/api/organizations/7/events")
                         .header("Authorization", "Bearer " + tokenService.issue(42L)))
@@ -156,6 +157,9 @@ class EventControllerApiTest {
                 .andExpect(jsonPath("$[0].endTime").value("22:00:00"))
                 .andExpect(jsonPath("$[0].location").value("Room 1"))
                 .andExpect(jsonPath("$[0].capacity").value(50))
+                .andExpect(jsonPath("$[0].registrationCount").value(4))
+                .andExpect(jsonPath("$[0].firstName").doesNotExist())
+                .andExpect(jsonPath("$[0].email").doesNotExist())
                 .andExpect(jsonPath("$[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$[0].tasks").doesNotExist())
                 .andExpect(jsonPath("$[1].status").value("PUBLISHED"))

@@ -3,6 +3,7 @@ package com.ubb.events.controllers;
 import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.EventService;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.OrganizationEventResponse;
 import com.ubb.events.dto.EventRegistrationResponse;
 import com.ubb.events.RegistrationService;
 import com.ubb.events.dto.CreateEventRequest;
@@ -60,7 +61,7 @@ public class EventController {
             @ApiResponse(responseCode = "401", description = "Authentication required"),
             @ApiResponse(responseCode = "403", description = "Organization membership required")
     })
-    public ResponseEntity<List<EventResponse>> listOrganizationEvents(@PathVariable Long organizationId) {
+    public ResponseEntity<List<OrganizationEventResponse>> listOrganizationEvents(@PathVariable Long organizationId) {
         return ResponseEntity.ok(eventService.listOrganizationEvents(organizationId));
     }
 
