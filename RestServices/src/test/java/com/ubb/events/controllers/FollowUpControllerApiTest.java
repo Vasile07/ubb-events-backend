@@ -5,6 +5,7 @@ import com.ubb.events.FollowUpService;
 import com.ubb.events.OrganizationAuthorizationService;
 import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.dto.FollowUpResponse;
+import com.ubb.events.common.errors.NotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -17,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -64,5 +66,63 @@ class FollowUpControllerApiTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\" \"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
         verifyNoInteractions(followUpService);
+    }
+
+    @Test
+    void unauthenticatedViewRequestIsRejected() throws Exception {
+        mockMvc.perform(get("/api/organizations/7/events/3/follow-up"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(followUpService);
+    }
+
+    @Test
+    void memberCanViewFollowUp() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(followUpService.getFollowUp(7L, 3L)).thenReturn(new FollowUpResponse(9L, 3L, "Feedback"));
+
+        mockMvc.perform(get("/api/organizations/7/events/3/follow-up")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(9))
+                .andExpect(jsonPath("$.eventId").value(3))
+                .andExpect(jsonPath("$.content").value("Feedback"));
+        verify(authorizationService).hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER);
+        verify(followUpService).getFollowUp(7L, 3L);
+    }
+
+    @Test
+    void managerCanViewFollowUp() throws Exception {
+        when(authorizationService.hasAtLeast(43L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(followUpService.getFollowUp(7L, 3L)).thenReturn(new FollowUpResponse(9L, 3L, "Feedback"));
+
+        mockMvc.perform(get("/api/organizations/7/events/3/follow-up")
+                        .header("Authorization", "Bearer " + tokenService.issue(43L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(9));
+        verify(authorizationService).hasAtLeast(43L, 7L, EffectiveOrgRole.MEMBER);
+    }
+
+    @Test
+    void nonMemberCannotViewFollowUp() throws Exception {
+        when(authorizationService.hasAtLeast(44L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(false);
+
+        mockMvc.perform(get("/api/organizations/7/events/3/follow-up")
+                        .header("Authorization", "Bearer " + tokenService.issue(44L)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+        verifyNoInteractions(followUpService);
+    }
+
+    @Test
+    void missingFollowUpReturnsSharedNotFoundResponse() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
+        when(followUpService.getFollowUp(7L, 3L)).thenThrow(new NotFoundException("Follow-up not found"));
+
+        mockMvc.perform(get("/api/organizations/7/events/3/follow-up")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Follow-up not found"));
+        verify(followUpService).getFollowUp(7L, 3L);
     }
 }

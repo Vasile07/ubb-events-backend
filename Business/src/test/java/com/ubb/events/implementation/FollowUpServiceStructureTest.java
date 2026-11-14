@@ -31,6 +31,33 @@ class FollowUpServiceStructureTest {
     }
 
     @Test
+    void retrievesFollowUpForOrganizationAndEvent() {
+        Event event = new Event(3L, new Organization(7L, "Org", null, null), 1L, "Event", "Description",
+                LocalDate.of(2026, 1, 1), LocalTime.of(10, 0), LocalTime.of(11, 0), null, 10L,
+                EventStatus.PUBLISHED);
+        var followUp = new com.ubb.events.domain.FollowUp(9L, event, "Feedback");
+        FollowUpRepository followUps = mock(FollowUpRepository.class);
+        when(followUps.findByEvent_IdAndEvent_Organization_Id(3L, 7L)).thenReturn(Optional.of(followUp));
+
+        FollowUpResponse response = new FollowUpServiceImpl(mock(EventRepository.class), followUps, Clock.systemUTC())
+                .getFollowUp(7L, 3L);
+
+        assertEquals(9L, response.getId());
+        assertEquals(3L, response.getEventId());
+        assertEquals("Feedback", response.getContent());
+        verify(followUps).findByEvent_IdAndEvent_Organization_Id(3L, 7L);
+    }
+
+    @Test
+    void missingFollowUpIsNotFoundForRequestedOrganizationAndEvent() {
+        FollowUpRepository followUps = mock(FollowUpRepository.class);
+        when(followUps.findByEvent_IdAndEvent_Organization_Id(3L, 7L)).thenReturn(Optional.empty());
+        var service = new FollowUpServiceImpl(mock(EventRepository.class), followUps, Clock.systemUTC());
+
+        assertThrows(com.ubb.events.common.errors.NotFoundException.class, () -> service.getFollowUp(7L, 3L));
+    }
+
+    @Test
     void createsFollowUpOnlyForCompletedEvent() {
         EventRepository events = mock(EventRepository.class);
         FollowUpRepository followUps = mock(FollowUpRepository.class);

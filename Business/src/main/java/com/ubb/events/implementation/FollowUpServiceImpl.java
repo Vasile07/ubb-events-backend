@@ -47,4 +47,11 @@ public class FollowUpServiceImpl implements FollowUpService {
         FollowUp saved = followUps.save(new FollowUp(null, event, request.getContent()));
         return new FollowUpResponse(saved.getId(), event.getId(), saved.getContent());
     }
+
+    @Override
+    public FollowUpResponse getFollowUp(Long organizationId, Long eventId) {
+        FollowUp followUp = followUps.findByEvent_IdAndEvent_Organization_Id(eventId, organizationId)
+                .orElseThrow(() -> new NotFoundException("Follow-up not found"));
+        return new FollowUpResponse(followUp.getId(), followUp.getEvent().getId(), followUp.getContent());
+    }
 }
