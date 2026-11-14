@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
@@ -22,6 +23,31 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 class AnnouncementControllerApiTest {
     @Autowired MockMvc mockMvc; @Autowired JwtTokenService tokenService;
     @MockitoBean AnnouncementService announcementService; @MockitoBean OrganizationAuthorizationService authorizationService;
+
+    @Test void registeredParticipantCanViewAnnouncements() throws Exception {
+        when(announcementService.list(3L, 42L)).thenReturn(java.util.List.of(new AnnouncementResponse(9L, 3L, "Title", "Content")));
+        mockMvc.perform(get("/api/events/3/announcements").header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(9)).andExpect(jsonPath("$[0].eventId").value(3))
+                .andExpect(jsonPath("$[0].title").value("Title")).andExpect(jsonPath("$[0].content").value("Content"))
+                .andExpect(jsonPath("$[0].author").doesNotExist()).andExpect(jsonPath("$[0].creationDate").doesNotExist());
+    }
+
+    @Test void unauthenticatedCannotViewAnnouncements() throws Exception {
+        mockMvc.perform(get("/api/events/3/announcements")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(announcementService);
+    }
+
+    @Test void emptyAnnouncementsAreReturnedAsEmptyArray() throws Exception {
+        when(announcementService.list(3L, 42L)).thenReturn(java.util.List.of());
+        mockMvc.perform(get("/api/events/3/announcements").header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+
+    @Test void unknownEventIsReturnedAsNotFound() throws Exception {
+        when(announcementService.list(999L, 42L)).thenThrow(new com.ubb.events.common.errors.NotFoundException("Event not found"));
+        mockMvc.perform(get("/api/events/999/announcements").header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isNotFound());
+    }
 
     @Test void memberCanPublishAnnouncement() throws Exception {
         when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MEMBER)).thenReturn(true);
