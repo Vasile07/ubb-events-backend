@@ -106,6 +106,17 @@ class EventTaskRepositoryTest {
                 tasks.stream().map(EventTask::getId).toList());
     }
 
+    @Test
+    void findsTaskOnlyWithinItsEvent() {
+        Event event = saveEvent();
+        Event otherEvent = saveEvent();
+        EventTask task = repository.saveAndFlush(new EventTask(null, "Book the room", null, event));
+
+        entityManager.clear();
+        assertEquals("Book the room", repository.findByIdAndEventId(task.getId(), event.getId()).orElseThrow().getDescription());
+        assertTrue(repository.findByIdAndEventId(task.getId(), otherEvent.getId()).isEmpty());
+    }
+
     private Event saveEvent() {
         Organization organization = organizationRepository.saveAndFlush(new Organization(null, "UBB CS", null, null));
         return eventRepository.saveAndFlush(new Event(null, organization, 1L, "Hackathon", "Coding night",

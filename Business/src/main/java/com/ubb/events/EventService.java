@@ -5,6 +5,7 @@ import com.ubb.events.dto.EventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
+import com.ubb.events.dto.UpdateEventRequest;
 import java.util.List;
 
 public interface EventService {
@@ -12,6 +13,7 @@ public interface EventService {
     List<EventResponse> listOrganizationEvents(Long organizationId);
     EventResponse getOrganizationEvent(Long organizationId, Long eventId);
     EventResponse publishEvent(Long organizationId, Long eventId);
+    EventResponse updateEvent(Long organizationId, Long eventId, UpdateEventRequest request);
     void deleteEvent(Long organizationId, Long eventId);
     List<EventSummaryResponse> discoverEvents(EventDiscoveryFilter filter);
     EventDetailsResponse inspectEvent(Long eventId, Long userId);
