@@ -15,6 +15,7 @@ import com.ubb.events.dto.ErrorDetail;
 import com.ubb.events.dto.EventDiscoveryFilter;
 import com.ubb.events.dto.EventOrganizationSummaryResponse;
 import com.ubb.events.dto.EventResponse;
+import com.ubb.events.dto.OrganizationEventResponse;
 import com.ubb.events.dto.EventSummaryResponse;
 import com.ubb.events.dto.EventDetailsResponse;
 import com.ubb.events.dto.CreateEventRequest;
@@ -571,17 +572,31 @@ class EventServiceTest {
         Event canceled = new Event(3L, organization, 4L, "Party", "Canceled party",
                 DATE.plusDays(2), START, null, null, null, EventStatus.CANCELED);
         when(events.findAllByOrganizationIdOrderByDateAscStartTimeAsc(7L)).thenReturn(List.of(draft, published, canceled));
+        when(registrations.countByEventId(1L)).thenReturn(0L);
+        when(registrations.countByEventId(2L)).thenReturn(18L);
+        when(registrations.countByEventId(3L)).thenReturn(0L);
 
-        List<EventResponse> result = service.listOrganizationEvents(7L);
+        List<OrganizationEventResponse> result = service.listOrganizationEvents(7L);
 
         assertEquals(List.of(
-                new EventResponse(1L, 7L, 3L, "Hackathon", "Coding night",
-                        DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT),
-                new EventResponse(2L, 7L, 3L, "Workshop", "Spring Boot",
-                        DATE.plusDays(1), START, null, null, null, EventStatus.PUBLISHED),
-                new EventResponse(3L, 7L, 4L, "Party", "Canceled party",
-                        DATE.plusDays(2), START, null, null, null, EventStatus.CANCELED)), result);
+                new OrganizationEventResponse(1L, 7L, 3L, "Hackathon", "Coding night",
+                        DATE, START, LocalTime.of(22, 0), "Room 1", 50L, EventStatus.DRAFT, 0L),
+                new OrganizationEventResponse(2L, 7L, 3L, "Workshop", "Spring Boot",
+                        DATE.plusDays(1), START, null, null, null, EventStatus.PUBLISHED, 18L),
+                new OrganizationEventResponse(3L, 7L, 4L, "Party", "Canceled party",
+                        DATE.plusDays(2), START, null, null, null, EventStatus.CANCELED, 0L)), result);
         verify(events).findAllByOrganizationIdOrderByDateAscStartTimeAsc(7L);
+    }
+
+    @Test
+    void includesRegistrationCountInOrganizationEventListWithoutParticipantData() {
+        Event published = new Event(1L, organization, 3L, "Workshop", "Spring Boot",
+                DATE, START, null, "Room 1", 50L, EventStatus.PUBLISHED);
+        when(events.findAllByOrganizationIdOrderByDateAscStartTimeAsc(7L)).thenReturn(List.of(published));
+        when(registrations.countByEventId(1L)).thenReturn(4L);
+
+        assertEquals(1, service.listOrganizationEvents(7L).size());
+        verify(registrations).countByEventId(1L);
     }
 
     @Test
