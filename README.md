@@ -2,6 +2,10 @@
 
 This repository contains the Java 21 Spring Boot backend for the UBB Events system.
 
+## Deployed version
+
+[Open the backend Swagger UI](https://ubb-events-backend.onrender.com/swagger-ui.html). A monitor bot pings the Render backend to keep it available.
+
 ## Structure
 
 - `Model`: domain entities and request/response DTOs.
