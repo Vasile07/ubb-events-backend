@@ -5,7 +5,9 @@ import com.ubb.events.EffectiveOrgRole;
 import com.ubb.events.common.errors.BusinessRuleException;
 import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.domain.MembershipStatus;
+import com.ubb.events.domain.MembershipRequestDetailsStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
+import com.ubb.events.dto.MembershipRequestDetailsResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.OrganizationMemberResponse;
@@ -68,6 +70,21 @@ public class MembershipController {
             @PathVariable Long organizationId,
             @RequestParam(required = false) MembershipStatus status) {
         return ResponseEntity.ok(membershipService.listMembershipRequests(organizationId, status));
+    }
+
+    @GetMapping("/{organizationId}/membership-requests/details")
+    @RequireOrgPermission(EffectiveOrgRole.MANAGER)
+    @Operation(summary = "View detailed organization membership requests")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Detailed membership requests returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid organization id or status"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Manager organization access required")
+    })
+    public ResponseEntity<List<MembershipRequestDetailsResponse>> listMembershipRequestDetails(
+            @PathVariable Long organizationId,
+            @RequestParam(required = false) MembershipRequestDetailsStatus status) {
+        return ResponseEntity.ok(membershipService.listMembershipRequestDetails(organizationId, status));
     }
 
     @GetMapping("/{organizationId}/members")

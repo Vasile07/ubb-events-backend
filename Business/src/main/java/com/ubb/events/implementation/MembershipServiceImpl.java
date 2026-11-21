@@ -8,7 +8,10 @@ import com.ubb.events.domain.Membership;
 import com.ubb.events.domain.MembershipDecision;
 import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.domain.MembershipStatus;
+import com.ubb.events.domain.MembershipRequestHistory;
+import com.ubb.events.domain.MembershipRequestDetailsStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
+import com.ubb.events.dto.MembershipRequestDetailsResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.MembershipDecisionStatus;
@@ -17,20 +20,31 @@ import com.ubb.events.dto.RolePromotionResponse;
 import com.ubb.events.persistence.MembershipRepository;
 import com.ubb.events.persistence.OrganizationRepository;
 import com.ubb.events.persistence.UserRepository;
+import com.ubb.events.persistence.MembershipRequestHistoryRepository;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class MembershipServiceImpl implements MembershipService {
     private final MembershipRepository memberships;
     private final OrganizationRepository organizations;
     private final UserRepository users;
+    private final MembershipRequestHistoryRepository requestHistory;
 
-    public MembershipServiceImpl(MembershipRepository memberships, OrganizationRepository organizations, UserRepository users) {
+    @Autowired
+    public MembershipServiceImpl(MembershipRepository memberships, OrganizationRepository organizations, UserRepository users,
+                                 MembershipRequestHistoryRepository requestHistory) {
         this.memberships = memberships;
         this.organizations = organizations;
         this.users = users;
+        this.requestHistory = requestHistory;
+    }
+
+    public MembershipServiceImpl(MembershipRepository memberships, OrganizationRepository organizations, UserRepository users) {
+        this(memberships, organizations, users, null);
     }
 
     @Override
@@ -50,19 +64,38 @@ public class MembershipServiceImpl implements MembershipService {
                 throw new ConflictException("A membership request is already pending");
             }
         }
-        memberships.save(new Membership(null, user, organization,
+        Membership saved = memberships.save(new Membership(null, user, organization,
                 MembershipRole.MEMBER, MembershipStatus.PENDING));
+        if (requestHistory != null) {
+            requestHistory.save(new com.ubb.events.domain.MembershipRequestHistory(
+                    null, saved.getId(), user, organization, Instant.now(), MembershipRequestDetailsStatus.PENDING));
+        }
     }
 
     @Override
     public List<MembershipRequestResponse> listMembershipRequests(Long organizationId, MembershipStatus status) {
         MembershipStatus requestedStatus = status == null ? MembershipStatus.PENDING : status;
         return memberships.findAllByOrganizationIdAndStatus(organizationId, requestedStatus).stream()
-                .map(membership -> new MembershipRequestResponse(
-                        membership.getId(),
-                        membership.getUser().getId(),
-                        membership.getRole(),
-                        membership.getStatus()))
+                .map(membership -> new MembershipRequestResponse(membership.getId(), membership.getUser().getId(),
+                        membership.getRole(), membership.getStatus()))
+                .toList();
+    }
+
+    @Override
+    public List<MembershipRequestDetailsResponse> listMembershipRequestDetails(Long organizationId,
+                                                                                 MembershipRequestDetailsStatus status) {
+        MembershipRequestDetailsStatus requestedStatus = status == null ? MembershipRequestDetailsStatus.PENDING : status;
+        if (requestHistory == null) return List.of();
+        if (requestedStatus == MembershipRequestDetailsStatus.PENDING) {
+            return memberships.findAllByOrganizationIdAndStatus(organizationId, MembershipStatus.PENDING).stream()
+                    .map(membership -> new MembershipRequestDetailsResponse(membership.getId(), membership.getUser().getFirstName(),
+                            membership.getUser().getLastName(), membership.getUser().getEmail(),
+                            requestHistory.findByMembershipId(membership.getId()).map(MembershipRequestHistory::getRequestedAt).orElse(null),
+                            MembershipRequestDetailsStatus.PENDING)).toList();
+        }
+        return requestHistory.findAllByOrganizationIdAndStatus(organizationId, requestedStatus).stream()
+                .map(history -> new MembershipRequestDetailsResponse(history.getMembershipId(), history.getUser().getFirstName(),
+                        history.getUser().getLastName(), history.getUser().getEmail(), history.getRequestedAt(), requestedStatus))
                 .toList();
     }
 
@@ -92,14 +125,27 @@ public class MembershipServiceImpl implements MembershipService {
         }
 
         if (request.getDecision() == MembershipDecision.ACCEPTED) {
+            recordDecisionHistory(membership, MembershipRequestDetailsStatus.ACCEPTED);
             membership.setRole(MembershipRole.MEMBER);
             membership.setStatus(MembershipStatus.ACTIVE);
             memberships.save(membership);
             return new MembershipDecisionResponse(MembershipDecisionStatus.ACTIVE);
         }
 
+        recordDecisionHistory(membership, MembershipRequestDetailsStatus.DECLINED);
         memberships.delete(membership);
         return new MembershipDecisionResponse(MembershipDecisionStatus.DECLINED);
+    }
+
+    private void recordDecisionHistory(Membership membership, MembershipRequestDetailsStatus status) {
+        if (requestHistory == null) {
+            return;
+        }
+        MembershipRequestHistory history = requestHistory.findByMembershipId(membership.getId())
+                .orElseGet(() -> new MembershipRequestHistory(null, membership.getId(), membership.getUser(),
+                        membership.getOrganization(), null, status));
+        history.setStatus(status);
+        requestHistory.save(history);
     }
 
     @Override

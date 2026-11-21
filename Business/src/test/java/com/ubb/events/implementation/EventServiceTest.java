@@ -47,6 +47,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+
 @ExtendWith(MockitoExtension.class)
 class EventServiceTest {
     private static final LocalDate DATE = LocalDate.of(2026, 11, 20);
