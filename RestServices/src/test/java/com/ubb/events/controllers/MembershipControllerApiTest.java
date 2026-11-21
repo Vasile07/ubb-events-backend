@@ -6,7 +6,9 @@ import com.ubb.events.OrganizationAuthorizationService;
 import com.ubb.events.common.security.JwtTokenService;
 import com.ubb.events.domain.MembershipRole;
 import com.ubb.events.domain.MembershipStatus;
+import com.ubb.events.domain.MembershipRequestDetailsStatus;
 import com.ubb.events.dto.MembershipRequestResponse;
+import com.ubb.events.dto.MembershipRequestDetailsResponse;
 import com.ubb.events.dto.MembershipDecisionRequest;
 import com.ubb.events.dto.MembershipDecisionResponse;
 import com.ubb.events.dto.MembershipDecisionStatus;
@@ -153,6 +155,25 @@ class MembershipControllerApiTest {
                 .andExpect(jsonPath("$[0].userId").value(99))
                 .andExpect(jsonPath("$[0].role").value("MEMBER"))
                 .andExpect(jsonPath("$[0].status").value("PENDING"));
+    }
+
+    @Test
+    void managerCanListAcceptedRequestDetailsWithoutUserId() throws Exception {
+        when(authorizationService.hasAtLeast(42L, 7L, EffectiveOrgRole.MANAGER)).thenReturn(true);
+        when(membershipService.listMembershipRequestDetails(7L, MembershipRequestDetailsStatus.ACCEPTED)).thenReturn(List.of(
+                new MembershipRequestDetailsResponse(11L, "Ana", "Student", "ana@example.com",
+                        java.time.Instant.parse("2026-11-19T14:30:00Z"), MembershipRequestDetailsStatus.ACCEPTED)));
+
+        mockMvc.perform(get("/api/organizations/7/membership-requests/details?status=ACCEPTED")
+                        .header("Authorization", "Bearer " + tokenService.issue(42L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].requestId").value(11))
+                .andExpect(jsonPath("$[0].status").value("ACCEPTED"))
+                .andExpect(jsonPath("$[0].firstName").value("Ana"))
+                .andExpect(jsonPath("$[0].lastName").value("Student"))
+                .andExpect(jsonPath("$[0].email").value("ana@example.com"))
+                .andExpect(jsonPath("$[0].requestedAt").value("2026-11-19T14:30:00Z"))
+                .andExpect(jsonPath("$[0].userId").doesNotExist());
     }
 
     @Test
